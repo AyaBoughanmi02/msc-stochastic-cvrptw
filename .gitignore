@@ -1,0 +1,11 @@
+﻿.venv/
+.idea/
+__pycache__/
+*.pyc
+data/
+checkpoints/
+runs/
+wandb/
+*.pt
+*.ckpt
+.ipynb_checkpoints/
