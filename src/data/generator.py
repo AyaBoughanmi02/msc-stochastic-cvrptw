@@ -21,13 +21,22 @@ def generate_cvrp(
     demand_range: tuple[int, int] = (1, 9),
     seed: int | None = None,
     device: str | torch.device = "cpu",
-) -> tuple[Tensor, Tensor, float]:
+    return_raw: bool = False,         # also return integer demands + capacity D
+) -> tuple[Tensor, Tensor, float] | tuple[Tensor, Tensor, float, Tensor, int]:
     """Sample a batch of CVRP instances.
 
-    Returns:
+    Returns (return_raw=False, default):
         coords:   (B, N, 2)  N = n_customers + 1, node 0 is the depot
         demand:   (B, N)     normalised to (0, 1]; demand[:, 0] = 0
         capacity: float      normalised vehicle capacity (always 1.0)
+
+    Returns (return_raw=True), additionally:
+        demand_raw: (B, N)   integer demands in [1, 9]; demand_raw[:, 0] = 0
+        D:          int      integer vehicle capacity (the normalisation divisor)
+
+    The raw values reuse the same draws as the normalised ones (no extra RNG
+    calls), so instances are bit-identical regardless of `return_raw`. They exist
+    for external solvers (e.g. OR-Tools) that need integer demands and capacity.
     """
     if capacity is None:
         if n_customers not in _DEFAULT_CAPACITY:
@@ -46,5 +55,11 @@ def generate_cvrp(
     dem_int = torch.randint(low, high + 1, (batch_size, n_customers), generator=gen)
     demand = dem_int.float() / float(capacity)                    # normalise -> (0, 1]
     demand = torch.cat([torch.zeros(batch_size, 1), demand], dim=1)  # depot demand 0
+
+    if return_raw:
+        dem_raw = torch.cat(
+            [torch.zeros(batch_size, 1, dtype=torch.long), dem_int], dim=1
+        )  # (B, N) int64, depot column 0
+        return coords.to(device), demand.to(device), 1.0, dem_raw.to(device), int(capacity)
 
     return coords.to(device), demand.to(device), 1.0
