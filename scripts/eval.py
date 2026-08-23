@@ -19,6 +19,7 @@ import torch
 
 from src.data.generator import generate_cvrp
 from src.eval.evaluate import evaluate, optimality_gap
+from src.eval.reference import assert_reference_alignment, load_reference
 from src.models.factory import build_policy
 
 
@@ -62,12 +63,24 @@ def main() -> None:
     print(f"std cost        : {cost.std().item():.4f}")
 
     if args.ref is not None:
-        ref = torch.load(args.ref, map_location=device).to(cost.device).float()
+        ref, sidecar = load_reference(args.ref)
+        ref = ref.to(cost.device)
+        if sidecar is not None:
+            # Fail loudly if the reference was built on different instances.
+            assert_reference_alignment(
+                sidecar, n_customers, args.test_seed, args.test_size
+            )
+        else:
+            print("warning: reference has no sidecar; cannot verify instance "
+                  "alignment (n/seed/size). Trust the gap only if the reference "
+                  "was built on identical instances.")
         if ref.shape != cost.shape:
             raise ValueError(f"reference shape {ref.shape} != cost {cost.shape}")
         gap = optimality_gap(cost, ref)
         print(f"reference cost  : {ref.mean().item():.4f}")
         print(f"optimality gap  : {gap.mean().item():.2f}%")
+        print("  (gap vs OR-Tools GLS reference: near-optimal, not proven-optimal;"
+              " negative = model beat the reference)")
 
 
 if __name__ == "__main__":
