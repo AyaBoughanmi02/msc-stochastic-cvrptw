@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--test-seed", type=int, default=2024)
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     p.add_argument("--augment", action="store_true", help="8x dihedral augmentation")
+    p.add_argument("--eval-batch-size", type=int, default=8,
+                   help="instances per eval chunk (bounds GPU memory); lower if OOM")
     p.add_argument("--ref", type=str, default=None, help=".pt with reference costs")
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -54,7 +56,10 @@ def main() -> None:
     coords, demand, cap = generate_cvrp(
         args.test_size, n_customers, capacity, seed=args.test_seed, device=device
     )
-    cost = evaluate(policy, coords, demand, cap, args.n_starts, augment=args.augment)
+    cost = evaluate(
+        policy, coords, demand, cap, args.n_starts,
+        augment=args.augment, eval_batch_size=args.eval_batch_size,
+    )
 
     mode = "greedy best-of-N" + (" + 8x aug" if args.augment else "")
     print(f"instances       : {args.test_size} (CVRP{n_customers})")

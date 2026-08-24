@@ -5,6 +5,12 @@ POMO's reported score is the best of the N multi-start greedy rollouts per
 instance (not the mean). Instance augmentation applies the 8 dihedral symmetries
 of the unit square; these preserve pairwise distances, so tour costs are
 comparable across augmentations and we simply take the best candidate overall.
+
+Evaluation is embarrassingly parallel over the instance axis (each instance's
+cost is computed independently), so `evaluate` can chunk the instances via
+`eval_batch_size` to bound peak GPU memory. The full test set expands by
+augment (x8) and n_starts (xN), so on a small card the un-chunked forward pass
+can OOM; chunking changes no result, only the memory ceiling.
 """
 
 from __future__ import annotations
@@ -61,20 +67,15 @@ def augment_coords_8(coords: Tensor) -> Tensor:
 
 
 @torch.no_grad()
-def evaluate(
+def _evaluate_all(
     policy: CVRPPolicy,
     coords: Tensor,             # (B, N, 2)
     demand: Tensor,             # (B, N)
     capacity: Tensor | float,
-    n_starts: int | None = None,
-    augment: bool = False,
+    n_starts: int | None,
+    augment: bool,
 ) -> Tensor:
-    """Per-instance best cost. Returns (B,).
-
-    With augment=True, runs best-of-N greedy on all 8 symmetries and takes the
-    overall best (POMO's strongest inference mode).
-    """
-    policy.eval()
+    """Per-instance best cost for the WHOLE input in one pass. Returns (B,)."""
     if not augment:
         return multistart_greedy_cost(policy, coords, demand, capacity, n_starts)
 
@@ -82,8 +83,49 @@ def evaluate(
     aug = augment_coords_8(coords)                          # (8, B, N, 2)
     aug_flat = aug.reshape(8 * b, n, 2)                     # (8B, N, 2)
     demand_rep = demand.unsqueeze(0).expand(8, -1, -1).reshape(8 * b, n)
-    cost = multistart_greedy_cost(policy, aug_flat, demand_rep, capacity, n_starts)
+    capacity_rep = (
+        capacity.unsqueeze(0).expand(8, -1).reshape(8 * b)
+        if isinstance(capacity, Tensor)
+        else capacity
+    )
+    cost = multistart_greedy_cost(policy, aug_flat, demand_rep, capacity_rep, n_starts)
     return cost.reshape(8, b).min(dim=0).values            # (B,) best over augments
+
+
+@torch.no_grad()
+def evaluate(
+    policy: CVRPPolicy,
+    coords: Tensor,             # (B, N, 2)
+    demand: Tensor,             # (B, N)
+    capacity: Tensor | float,
+    n_starts: int | None = None,
+    augment: bool = False,
+    eval_batch_size: int | None = None,  # chunk instances to bound peak memory
+) -> Tensor:
+    """Per-instance best cost. Returns (B,).
+
+    With augment=True, runs best-of-N greedy on all 8 symmetries and takes the
+    overall best (POMO's strongest inference mode).
+
+    eval_batch_size chunks the instance axis: the full set expands by augment
+    (x8) and n_starts (xN), so on a small GPU the single-pass forward can OOM.
+    Chunking is result-preserving (instances are independent); None means no
+    chunking (prior behaviour). A chunk holds up to
+    eval_batch_size * (8 if augment else 1) * n_starts graphs at once.
+    """
+    policy.eval()
+    b = coords.shape[0]
+    if eval_batch_size is None or eval_batch_size >= b:
+        return _evaluate_all(policy, coords, demand, capacity, n_starts, augment)
+
+    costs: list[Tensor] = []
+    for i in range(0, b, eval_batch_size):
+        sl = slice(i, i + eval_batch_size)
+        cap_chunk = capacity[sl] if isinstance(capacity, Tensor) else capacity
+        costs.append(
+            _evaluate_all(policy, coords[sl], demand[sl], cap_chunk, n_starts, augment)
+        )
+    return torch.cat(costs, dim=0)                          # (B,)
 
 
 def optimality_gap(cost: Tensor, reference: Tensor) -> Tensor:
