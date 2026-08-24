@@ -93,7 +93,7 @@ def train_step(
     demand: Tensor,
     capacity: Tensor | float,
     n_starts: int | None = None,
-    grad_clip: float | None = 1.0,
+    grad_clip: float | None = None,  # Kwon uses no clipping; enable if unstable
 ) -> dict[str, float]:
     """One POMO gradient step. Returns {'loss', 'mean_cost', 'grad_norm'}."""
     policy.train()
@@ -115,13 +115,56 @@ def train_step(
     }
 
 
+def train_step_accum(
+        policy: CVRPPolicy,
+        optimizer: torch.optim.Optimizer,
+        sample_batch: Callable[[], tuple[Tensor, Tensor, float | Tensor]],
+        accum_steps: int = 1,
+        n_starts: int | None = None,
+        grad_clip: float | None = None,
+) -> dict[str, float]:
+    """One optimizer step over `accum_steps` accumulated POMO mini-batches.
+
+    Each mini-batch's loss is scaled by 1/accum_steps before backward, so the
+    accumulated gradient is the MEAN of the mini-batch gradients -- a
+    lower-variance estimate equivalent to a batch accum_steps x larger, at the
+    memory cost of a single mini-batch. (Exact equality to one large batch holds
+    up to BatchNorm's batch-coupling, a negligible approximation here.) The POMO
+    shared baseline is per-instance (over each instance's own starts), so it is
+    unaffected by accumulation.
+
+    accum_steps=1 reproduces a single-batch step exactly.
+    """
+    if accum_steps < 1:
+        raise ValueError(f"accum_steps must be >= 1, got {accum_steps}")
+    policy.train()
+    optimizer.zero_grad()
+    loss_sum = 0.0
+    cost_sum = 0.0
+    for _ in range(accum_steps):
+        coords, demand, capacity = sample_batch()
+        cost, sum_logp = pomo_rollout(policy, coords, demand, capacity, n_starts)
+        loss, mean_cost = pomo_loss(cost, sum_logp)
+        (loss / accum_steps).backward()  # accumulate mean gradient
+        loss_sum += float(loss.detach())
+        cost_sum += float(mean_cost.detach())
+    if grad_clip is not None:  # clip the accumulated gradient
+        grad_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), grad_clip)
+    else:
+        grad_norm = torch.tensor(float("nan"))
+    optimizer.step()
+    return {"loss": loss_sum / accum_steps, "mean_cost": cost_sum / accum_steps,
+            "grad_norm": float(grad_norm)}
+
+
 def train(
     policy: CVRPPolicy,
     sample_batch: Callable[[], tuple[Tensor, Tensor, float]],
     n_steps: int,
-    lr: float = 1e-4,
+    lr: float = 1e-4,               # Kwon: Adam lr 1e-4
+    weight_decay: float = 1e-6,     # Kwon: weight_decay 1e-6
     n_starts: int | None = None,
-    grad_clip: float | None = 1.0,
+    grad_clip: float | None = None,  # Kwon: no clipping
     log_every: int = 10,
 ) -> list[dict[str, float]]:
     """Minimal POMO training loop over freshly sampled instances.
@@ -129,7 +172,9 @@ def train(
     sample_batch: callable returning (coords, demand, capacity) for one batch.
     Returns the list of per-step metric dicts.
     """
-    optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(
+        policy.parameters(), lr=lr, weight_decay=weight_decay
+    )
     history: list[dict[str, float]] = []
     for step in range(n_steps):
         coords, demand, capacity = sample_batch()
