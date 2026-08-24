@@ -23,11 +23,16 @@ DEFAULT_MODEL_CONFIG: dict[str, Any] = {
     "n_heads": 8,
     "tanh_clip": 10.0,
     "negative_slope": 0.2,
+    "norm": "batch",         # encoder input norm: 'batch' (Lei), 'layer', or 'none'
 }
 
 
 def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
-    """Instantiate a CVRPPolicy. Missing keys fall back to DEFAULT_MODEL_CONFIG."""
+    """Instantiate a CVRPPolicy. Missing keys fall back to DEFAULT_MODEL_CONFIG.
+
+    Old checkpoints whose model_config predates a key (e.g. 'norm') reconstruct
+    with the default for that key, so they keep loading.
+    """
     cfg = {**DEFAULT_MODEL_CONFIG, **(config or {})}
     encoder = EGATEncoder(
         input_node_dim=cfg["input_node_dim"],
@@ -37,6 +42,7 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
         n_layers=cfg["n_layers"],
         n_heads=cfg["n_heads"],
         negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],

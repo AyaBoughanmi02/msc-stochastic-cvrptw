@@ -44,6 +44,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--hidden-edge-dim", type=int, default=16)
     p.add_argument("--n-layers", type=int, default=4)
     p.add_argument("--n-heads", type=int, default=8)
+    p.add_argument("--norm", type=str, default="batch", choices=["batch", "layer", "none"],
+                   help="encoder input norm; layer/none avoid BatchNorm train/eval mismatch")
     # run
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=1234)
@@ -66,6 +68,7 @@ def main() -> None:
         hidden_edge_dim=args.hidden_edge_dim,
         n_layers=args.n_layers,
         n_heads=args.n_heads,
+        norm=args.norm,
     )
     policy = build_policy(model_config).to(device)
     optimizer = torch.optim.Adam(
