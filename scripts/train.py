@@ -37,6 +37,9 @@ def parse_args() -> argparse.Namespace:
                    help="grad accumulation; effective batch = batch-size * accum-steps")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--weight-decay", type=float, default=1e-6)
+    p.add_argument("--lr-schedule", type=str, default="none", choices=["none", "cosine"],
+                   help="cosine anneals lr from --lr down to --min-lr over --steps")
+    p.add_argument("--min-lr", type=float, default=0.0, help="final lr for cosine schedule")
     p.add_argument("--grad-clip", type=float, default=None, help="off by default")
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # architecture (locked)
@@ -77,6 +80,11 @@ def main() -> None:
     optimizer = torch.optim.Adam(
         policy.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
+    scheduler = None
+    if args.lr_schedule == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.steps, eta_min=args.min_lr
+        )
 
     # Fixed validation set (same instances throughout training).
     val_coords, val_demand, val_cap = generate_cvrp(
@@ -102,11 +110,14 @@ def main() -> None:
             policy, optimizer, sample_batch, args.accum_steps,
             args.n_starts, args.grad_clip,
         )
+        if scheduler is not None:
+            scheduler.step()
 
         if args.log_every and step % args.log_every == 0:
             print(
                 f"step {step:5d}/{args.steps} | loss {metrics['loss']:+.4f} "
                 f"| train_cost {metrics['mean_cost']:.4f} "
+                f"| lr {optimizer.param_groups[0]['lr']:.2e} "
                 f"| {step / (time.time() - t0):.1f} it/s"
             )
 
