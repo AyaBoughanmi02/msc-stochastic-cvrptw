@@ -24,6 +24,7 @@ DEFAULT_MODEL_CONFIG: dict[str, Any] = {
     "tanh_clip": 10.0,
     "negative_slope": 0.2,
     "norm": "batch",         # encoder input norm: 'batch' (Lei), 'layer', or 'none'
+    "attn": "scalar",        # attention granularity: 'scalar' (locked) or 'channel' (diagnostic)
 }
 
 
@@ -43,6 +44,7 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
         n_heads=cfg["n_heads"],
         negative_slope=cfg["negative_slope"],
         norm=cfg["norm"],
+        attn=cfg["attn"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],
