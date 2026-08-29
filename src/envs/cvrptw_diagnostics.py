@@ -1,0 +1,138 @@
+"""CVRPTW calibration diagnostics.
+
+Answers the calibration question the variance gate depends on: are the generated
+instances genuinely TIME-BINDING, or capacity problems wearing a CVRPTW costume?
+If time never actually removes an option, the policy can't learn window-aware
+routing and the gate has nothing to manage.
+
+We roll out generated instances with a greedy-feasible policy (pick the nearest
+feasible node) and, at every decision, decompose why each not-yet-served customer
+is infeasible: capacity vs time (window-closed or shift-exceeded). The headline is
+`time_only_rate` -- customers the vehicle could still carry but cannot reach in
+time. A meaningful value means time is a real constraint; near zero means loosen
+the dials (`tw_half_width`, `shift_end`).
+"""
+
+from __future__ import annotations
+
+from typing import NamedTuple
+
+import torch
+from torch import Tensor
+
+from src.data.cvrptw_generator import CVRPTWData
+from src.envs.cvrptw_env import CVRPTWEnv
+
+_EPS = 1e-6
+
+
+class InfeasibilityReasons(NamedTuple):
+    """Per-node boolean reasons at a given state (depot columns not meaningful)."""
+
+    visited: Tensor        # (B, N)
+    over_capacity: Tensor  # (B, N)
+    window_closed: Tensor  # (B, N)  condition (a)
+    cant_return: Tensor    # (B, N)  condition (b)
+
+
+def decompose_infeasibility(env: CVRPTWEnv) -> InfeasibilityReasons:
+    """Reason each node is (in)feasible at the env's current state.
+
+    The OR of these four over the CUSTOMER columns equals the real mask's customer
+    columns (verified in tests), so the diagnostic can't silently diverge from the
+    mask it is explaining.
+    """
+    idx = torch.arange(env.batch_size, device=env.coords.device)
+    travel_from_current = env.dist[idx, env.current_node]      # (B, N)
+    travel_to_depot = env.dist[:, :, 0]                        # (B, N)
+    earliest = env.time_windows[..., 0]
+    latest = env.time_windows[..., 1]
+    arrival = env.time.unsqueeze(1) + travel_from_current
+    serve_start = torch.maximum(arrival, earliest)
+    depart = serve_start + env.service_time
+
+    visited = env.visited.clone()
+    over_capacity = env.demand > env.remaining_capacity.unsqueeze(1) + _EPS
+    window_closed = arrival > latest + _EPS
+    cant_return = depart + travel_to_depot > env.shift_end + _EPS
+    return InfeasibilityReasons(visited, over_capacity, window_closed, cant_return)
+
+
+def greedy_feasible_rollout(env: CVRPTWEnv, max_steps: int | None = None) -> Tensor:
+    """Roll out picking the nearest feasible node each step. Returns (B, T) actions."""
+    mask = env.reset()
+    b, n = env.batch_size, env.num_nodes
+    max_steps = 3 * n if max_steps is None else max_steps
+    idx = torch.arange(b, device=env.coords.device)
+    actions: list[Tensor] = []
+    for _ in range(max_steps):
+        d = env.dist[idx, env.current_node].masked_fill(mask, float("inf"))
+        action = d.argmin(dim=1)
+        actions.append(action)
+        mask, done = env.step(action)
+        if bool(done.all()):
+            break
+    return torch.stack(actions, dim=1)
+
+
+def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[str, float]:
+    """Roll out `data` greedily and return time-vs-capacity binding statistics."""
+    env = CVRPTWEnv(
+        data.coords, data.demand, data.capacity,
+        data.time_windows, data.service_time, data.shift_end,
+    )
+    mask = env.reset()
+    b, n = env.batch_size, env.num_nodes
+    max_steps = 3 * n if max_steps is None else max_steps
+    idx = torch.arange(b, device=env.coords.device)
+    cust = slice(1, None)
+
+    tot_uv = time_only = cap_only = both = 0
+    steps_time_pressure = 0            # (instance, step) slots with >=1 time-only block
+    decisions = 0
+    served_since_depot = torch.zeros(b)
+    routes = torch.zeros(b)
+    utils: list[float] = []
+
+    for _ in range(max_steps):
+        r = decompose_infeasibility(env)
+        uv = ~r.visited[:, cust]                                   # unvisited customers
+        t_block = (r.window_closed | r.cant_return)[:, cust] & uv  # time-blocked
+        c_block = r.over_capacity[:, cust] & uv                    # capacity-blocked
+        t_only = t_block & ~c_block
+        tot_uv += int(uv.sum())
+        time_only += int(t_only.sum())
+        cap_only += int((c_block & ~t_block).sum())
+        both += int((t_block & c_block).sum())
+        steps_time_pressure += int(t_only.any(dim=1).sum())        # per (instance) this step
+        decisions += b
+
+        # record clock utilization at genuine depot returns (served >= 1 since depot)
+        d = env.dist[idx, env.current_node].masked_fill(mask, float("inf"))
+        action = d.argmin(dim=1)
+        is_depot = action == 0
+        arrival_depot = env.time + env.dist[idx, env.current_node, action]  # before reset
+        real_return = is_depot & (served_since_depot > 0)
+        if bool(real_return.any()):
+            routes += real_return.float()
+            utils.extend((arrival_depot[real_return] / env.shift_end).tolist())
+            served_since_depot = torch.where(real_return, torch.zeros(b), served_since_depot)
+        served_since_depot += (~is_depot).float()
+
+        mask, done = env.step(action)
+        if bool(done.all()):
+            break
+
+    # final routes (trajectories that ended mid-route with customers served)
+    routes += (served_since_depot > 0).float()
+    denom = max(tot_uv, 1)
+    return {
+        "time_only_rate": time_only / denom,
+        "capacity_only_rate": cap_only / denom,
+        "both_rate": both / denom,
+        "feasible_rate": 1.0 - (time_only + cap_only + both) / denom,
+        "steps_with_time_pressure_rate": steps_time_pressure / max(decisions, 1),
+        "avg_routes_per_instance": float(routes.mean()),
+        "avg_customers_per_route": (n - 1) / max(float(routes.mean()), 1e-9),
+        "avg_route_time_utilization": float(sum(utils) / len(utils)) if utils else 0.0,
+    }
