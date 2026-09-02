@@ -1,10 +1,3 @@
-"""Factory for building a CVRPPolicy from a config dict.
-
-Shared by the train and eval scripts so both instantiate an identical
-architecture. The same config dict is saved into checkpoints, so eval can
-rebuild the exact model the weights belong to.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -25,6 +18,7 @@ DEFAULT_MODEL_CONFIG: dict[str, Any] = {
     "negative_slope": 0.2,
     "norm": "batch",         # encoder input norm: 'batch' (Lei), 'layer', or 'none'
     "attn": "scalar",        # attention granularity: 'scalar' (locked) or 'channel' (diagnostic)
+    "context_extra_dim": 0,  # extra dynamic decoder-context scalars (CVRPTW clock = 1)
 }
 
 
@@ -50,6 +44,7 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
         hidden_dim=cfg["hidden_dim"],
         n_heads=cfg["n_heads"],
         tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
     )
     return CVRPPolicy(encoder, decoder)
 
