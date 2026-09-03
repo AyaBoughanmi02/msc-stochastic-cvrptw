@@ -97,11 +97,24 @@ def test_train_step_runs_and_updates_params() -> None:
     policy = _tiny_policy()
     opt = torch.optim.Adam(policy.parameters(), lr=1e-3)
     before = [p.detach().clone() for p in policy.parameters()]
-    metrics = train_step(policy, opt, coords, demand, cap)
+    # grad_clip=1.0 exercises the clipping path and returns a real grad norm.
+    metrics = train_step(policy, opt, coords, demand, cap, grad_clip=1.0)
     assert torch.isfinite(torch.tensor(metrics["loss"]))
     assert metrics["grad_norm"] >= 0.0
     after = list(policy.parameters())
     assert any(not torch.equal(b, a) for b, a in zip(before, after))
+
+
+def test_train_step_no_clip_reports_nan_grad_norm() -> None:
+    from src.train.pomo import train_step
+
+    coords, demand, cap = generate_cvrp(8, n_customers=5, capacity=10, seed=3)
+    policy = _tiny_policy()
+    opt = torch.optim.Adam(policy.parameters(), lr=1e-3)
+    metrics = train_step(policy, opt, coords, demand, cap)  # grad_clip=None default
+    assert torch.isfinite(torch.tensor(metrics["loss"]))
+    import math
+    assert math.isnan(metrics["grad_norm"])  # no clipping -> no norm reported
 
 
 def test_pomo_learns_on_fixed_problem() -> None:
