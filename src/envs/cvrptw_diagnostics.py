@@ -90,8 +90,8 @@ def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[st
     tot_uv = time_only = cap_only = both = 0
     steps_time_pressure = 0            # (instance, step) slots with >=1 time-only block
     decisions = 0
-    served_since_depot = torch.zeros(b)
-    routes = torch.zeros(b)
+    served_since_depot = torch.zeros(b, device=env.coords.device)
+    routes = torch.zeros(b, device=env.coords.device)
     utils: list[float] = []
 
     for _ in range(max_steps):
@@ -116,7 +116,9 @@ def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[st
         if bool(real_return.any()):
             routes += real_return.float()
             utils.extend((arrival_depot[real_return] / env.shift_end).tolist())
-            served_since_depot = torch.where(real_return, torch.zeros(b), served_since_depot)
+            served_since_depot = torch.where(
+                real_return, torch.zeros(b, device=env.coords.device), served_since_depot
+            )
         served_since_depot += (~is_depot).float()
 
         mask, done = env.step(action)
@@ -135,4 +137,59 @@ def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[st
         "avg_routes_per_instance": float(routes.mean()),
         "avg_customers_per_route": (n - 1) / max(float(routes.mean()), 1e-9),
         "avg_route_time_utilization": float(sum(utils) / len(utils)) if utils else 0.0,
+    }
+
+
+@torch.no_grad()
+def policy_binding_stats(policy, data: CVRPTWData) -> dict[str, float]:
+    """Time-vs-capacity binding breakdown under a TRAINED policy's own routing.
+
+    Rolls out `policy` greedily and, at each decision, decomposes why each unserved
+    customer is infeasible. Answers "does the trained policy actually face time
+    constraints?" (Level 2), complementing calibration_stats' instance-level view
+    (Level 1). `time_only_rate` = fraction of unserved-customer slots blocked by
+    time but not capacity.
+    """
+    from src.data.graph_build import build_graph_tw
+    from src.envs.cvrptw_env import CVRPTWEnv
+
+    policy.eval()
+    env = CVRPTWEnv(
+        data.coords, data.demand, data.capacity,
+        data.time_windows, data.service_time, data.shift_end,
+    )
+    b, n = env.batch_size, env.num_nodes
+    enc = build_graph_tw(env.coords, env.demand, env.time_windows, env.service_time)
+    node_flat, global_emb = policy.encoder(enc.x, enc.edge_index, enc.edge_attr, enc.batch)
+    node_emb = node_flat.view(b, n, -1)
+    cache = policy.decoder.precompute(node_emb)
+
+    mask = env.reset()
+    idx = torch.arange(b, device=env.coords.device)
+    cust = slice(1, None)
+    tot_uv = time_only = cap_only = both = 0
+    for _ in range(3 * n):
+        r = decompose_infeasibility(env)
+        uv = ~r.visited[:, cust]
+        t_block = (r.window_closed | r.cant_return)[:, cust] & uv
+        c_block = r.over_capacity[:, cust] & uv
+        tot_uv += int(uv.sum())
+        time_only += int((t_block & ~c_block).sum())
+        cap_only += int((c_block & ~t_block).sum())
+        both += int((t_block & c_block).sum())
+
+        last = node_emb[idx, env.current_node]
+        log_p = policy.decoder(
+            cache, global_emb, last, env.normalized_remaining(), mask,
+            context_extra=env.normalized_time(),
+        )
+        mask, done = env.step(log_p.argmax(dim=-1))
+        if bool(done.all()):
+            break
+
+    d = max(tot_uv, 1)
+    return {
+        "time_only_rate": time_only / d,
+        "capacity_only_rate": cap_only / d,
+        "both_rate": both / d,
     }

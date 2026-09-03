@@ -77,3 +77,14 @@ def test_calibration_stats_keys_and_ranges() -> None:
     for k in ("time_only_rate", "capacity_only_rate", "both_rate", "feasible_rate"):
         assert 0.0 <= s[k] <= 1.0
     assert s["avg_routes_per_instance"] >= 1.0
+
+
+def test_policy_binding_stats_runs() -> None:
+    from src.models.factory import build_cvrptw_policy
+    from src.envs.cvrptw_diagnostics import policy_binding_stats
+    import torch as _t
+    _t.manual_seed(0)
+    data = generate_cvrptw(16, 20, seed=3, capacity=20)
+    s = policy_binding_stats(build_cvrptw_policy(), data)
+    for k in ("time_only_rate", "capacity_only_rate", "both_rate"):
+        assert 0.0 <= s[k] <= 1.0
