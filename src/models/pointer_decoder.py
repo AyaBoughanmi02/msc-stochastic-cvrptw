@@ -7,10 +7,15 @@ updates live elsewhere (env + POMO loop); keeping the decoder single-step makes
 it testable in isolation and gives the POMO multi-start loop a clean home.
 
 Attention (Attention Model / Lei convention):
-  - context query  q = W_q [ graph_emb || last_node_emb || remaining_capacity ]
+  - context query  q = W_q [ graph_emb || last_node_emb || remaining_capacity
+                             (|| context_extra) ]
   - multi-head glimpse: q attends over node embeddings (masked), -> refined query
   - single-head pointer: refined query vs node keys -> logits, clipped by
     C * tanh(.), masked, then log-softmax.
+
+context_extra is an optional block of dynamic scalars appended to the context
+(CVRPTW passes the normalized clock); context_extra_dim=0 (default) reproduces the
+CVRP decoder exactly.
 
 Mask convention (shared with the env): mask is (B, N) boolean, True = infeasible.
 """
@@ -42,7 +47,7 @@ class PointerDecoder(nn.Module):
         hidden_dim: int = 128,
         n_heads: int = 8,
         tanh_clip: float = 10.0,
-        context_extra_dim: int = 0,
+        context_extra_dim: int = 0,   # extra dynamic context scalars (CVRPTW clock = 1)
     ) -> None:
         super().__init__()
         if hidden_dim % n_heads != 0:
@@ -53,9 +58,9 @@ class PointerDecoder(nn.Module):
         self.n_heads = n_heads
         self.head_dim = hidden_dim // n_heads
         self.tanh_clip = tanh_clip
-        self.context_extra_dim = context_extra_dim  # extra dynamic scalars (e.g. clock)
+        self.context_extra_dim = context_extra_dim
 
-        # Context query: [graph_emb || last_node_emb || remaining_capacity || extra].
+        # Context query: [graph_emb || last_node_emb || remaining_capacity || extra] -> hidden.
         self.wq_context = nn.Linear(2 * hidden_dim + 1 + context_extra_dim, hidden_dim, bias=False)
         # Glimpse (multi-head) projections of node embeddings.
         self.wk_glimpse = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -97,19 +102,40 @@ class PointerDecoder(nn.Module):
         last_node_emb: Tensor,       # (B, hidden)  embedding of current/last node
         remaining_capacity: Tensor,  # (B, 1)       normalised remaining capacity
         mask: Tensor,                # (B, N) bool, True = infeasible
-        context_extra: Tensor | None = None,
+        context_extra: Tensor | None = None,  # (B, context_extra_dim) dynamic scalars
     ) -> Tensor:
         """Return log-probabilities over the next node. Shape: (B, N)."""
         b, n = mask.shape
+
+        # --- context query ---
         parts = [graph_emb, last_node_emb, remaining_capacity]
         if context_extra is not None:
-            parts.append(context_extra)  # (B, context_extra_dim)
-        context = torch.cat(parts, dim=-1)  # (B, 2H+1+extra)
+            parts.append(context_extra)                    # (B, context_extra_dim)
+        context = torch.cat(parts, dim=-1)                 # (B, 2*hidden + 1 + extra)
         # Guard the seam: a mismatch crashes loudly instead of training silently.
         if context.shape[-1] != self.wq_context.in_features:
             raise ValueError(
                 f"decoder context width {context.shape[-1]} != expected "
                 f"{self.wq_context.in_features} (context_extra_dim={self.context_extra_dim})"
             )
-        q = self.wq_context(context)  # (B, hidden)
-        q = q.view(b, self.n_heads, 1, self.head_dim)  # (B, H, 1, hd)
+        q = self.wq_context(context)                       # (B, hidden)
+        q = q.view(b, self.n_heads, 1, self.head_dim)      # (B, H, 1, hd)
+
+        # --- multi-head glimpse: q attends over nodes (masked) ---
+        scores = torch.matmul(q, cache.glimpse_k.transpose(-2, -1)) / math.sqrt(
+            self.head_dim
+        )                                                  # (B, H, 1, N)
+        glimpse_mask = mask.view(b, 1, 1, n)               # broadcast over heads
+        scores = scores.masked_fill(glimpse_mask, float("-inf"))
+        attn = torch.softmax(scores, dim=-1)               # (B, H, 1, N)
+        glimpse = torch.matmul(attn, cache.glimpse_v)      # (B, H, 1, hd)
+        glimpse = glimpse.reshape(b, self.hidden_dim)      # (B, hidden)  concat heads
+        glimpse_q = self.w_out(glimpse)                    # (B, hidden)
+
+        # --- single-head pointer: refined query vs node keys ---
+        logits = torch.matmul(
+            cache.pointer_k, glimpse_q.unsqueeze(-1)
+        ).squeeze(-1) / math.sqrt(self.hidden_dim)         # (B, N)
+        logits = self.tanh_clip * torch.tanh(logits)       # tanh clip, C=10
+        logits = logits.masked_fill(mask, float("-inf"))   # forbid infeasible nodes
+        return F.log_softmax(logits, dim=-1)               # (B, N)

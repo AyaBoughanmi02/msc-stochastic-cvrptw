@@ -1,10 +1,11 @@
 # the data→graph bridge so the policy has a clean interface
-"""Bridge from dense CVRP instances to the flat (PyG-style) inputs the encoder
+"""Bridge from dense CVRP(TW) instances to the flat (PyG-style) inputs the encoder
 expects.
 
 The graph is fully connected including self-loops (Lei convention): every
 ordered pair (a, b) is an edge, edge feature = Euclidean distance between the
-two nodes' coordinates. Node feature = [x, y, demand]. Nodes are laid out
+two nodes' coordinates. Node feature = [x, y, demand] for CVRP, or
+[x, y, demand, earliest, latest, service] for CVRPTW. Nodes are laid out
 contiguously per instance so the encoder's flat output (B*N, hidden) can be
 reshaped to (B, N, hidden).
 """
@@ -20,14 +21,14 @@ from torch import Tensor
 class EncoderInputs(NamedTuple):
     """Flat graph tensors for EGATEncoder.forward."""
 
-    x: Tensor           # (B*N, 3)      node features [x, y, demand]
+    x: Tensor           # (B*N, d)      node features (d=3 CVRP, d=6 CVRPTW)
     edge_index: Tensor  # (2, B*N*N)    row 0 = source, row 1 = target
     edge_attr: Tensor   # (B*N*N, 1)    Euclidean distance (Stage-1 edge feature)
     batch: Tensor       # (B*N,)        graph id per node
 
 
 def build_graph(coords: Tensor, demand: Tensor) -> EncoderInputs:
-    """Build fully-connected (incl. self-loop) graph inputs.
+    """Build fully-connected (incl. self-loop) graph inputs (CVRP, 3-dim nodes).
 
     coords: (B, N, 2)
     demand: (B, N)     demand[:, 0] = 0 (depot)
@@ -53,16 +54,18 @@ def build_graph(coords: Tensor, demand: Tensor) -> EncoderInputs:
     batch = torch.arange(b, device=dev).repeat_interleave(n)  # (B*N,)
     return EncoderInputs(x, edge_index, dist, batch)
 
-def build_graph_tw(coords, demand, time_windows, service_time):
+
+def build_graph_tw(
+    coords: Tensor,        # (B, N, 2)
+    demand: Tensor,        # (B, N)
+    time_windows: Tensor,  # (B, N, 2)  [earliest, latest]
+    service_time: Tensor,  # (B, N)
+) -> EncoderInputs:
     """CVRPTW graph inputs: same fully-connected graph + distance edges as
     build_graph, but with 6-dim node features [x, y, demand, earliest, latest,
     service]. Reuses build_graph for edges/batch (single source of truth) and only
     replaces the node feature x, so build_graph itself is untouched.
 
-    coords:       (B, N, 2)
-    demand:       (B, N)
-    time_windows: (B, N, 2)  [earliest, latest]
-    service_time: (B, N)
     returns EncoderInputs with x: (B*N, 6); edge_index/edge_attr/batch identical
     to the CVRP graph.
     """
