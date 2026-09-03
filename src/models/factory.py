@@ -5,6 +5,7 @@ from typing import Any
 from src.models.egat_encoder import EGATEncoder
 from src.models.pointer_decoder import PointerDecoder
 from src.models.policy import CVRPPolicy
+from src.models.cvrptw_policy import CVRPTWPolicy
 
 # Default hyperparameters for the CVRP reproduction of Lei et al. (2022).
 DEFAULT_MODEL_CONFIG: dict[str, Any] = {
@@ -52,3 +53,35 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
 def model_config_from(**overrides: Any) -> dict[str, Any]:
     """Return a full model config dict with the given overrides applied."""
     return {**DEFAULT_MODEL_CONFIG, **overrides}
+
+
+# CVRPTW config: 6-dim node features [x,y,demand,earliest,latest,service] and a
+# decoder clock scalar. Everything else inherits the certified CVRP settings.
+DEFAULT_CVRPTW_CONFIG: dict[str, Any] = {
+    **DEFAULT_MODEL_CONFIG,
+    "input_node_dim": 6,
+    "context_extra_dim": 1,
+}
+
+
+def build_cvrptw_policy(config: dict[str, Any] | None = None) -> "CVRPTWPolicy":
+    """Instantiate a CVRPTWPolicy (6-dim node features + decoder clock scalar)."""
+    cfg = {**DEFAULT_CVRPTW_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+    )
+    return CVRPTWPolicy(encoder, decoder)
