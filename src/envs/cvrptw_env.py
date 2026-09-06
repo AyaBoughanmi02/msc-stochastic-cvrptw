@@ -8,8 +8,10 @@ Masking is CVRP masking plus the two hard time-window conditions
 inherited); the clock only drives feasibility.
 
 Travel time for variant A is Euclidean distance (time == distance), read from
-self.dist. The stochastic variants replace self.dist with an Edge-Bank lookup;
-nothing else in this class changes.
+self.dist through four seam hooks (_travel_from_current, _travel_to_depot,
+_travel_time, _on_arrival). The stochastic variants override those hooks with
+Edge-Bank lookups and a sampler; nothing else in this class changes. The hook
+defaults are exactly the expressions they replaced, so variant A is unchanged.
 """
 
 from __future__ import annotations
@@ -47,13 +49,42 @@ class CVRPTWEnv(CVRPEnv):
         super()._reset_state()                        # visited / current_node / capacity
         self.time = torch.zeros(self.batch_size, device=self.coords.device)  # (B,)
 
+    def _travel_from_current(self) -> Tensor:
+        """PLANNED travel time from the current node to every node. (B, N).
+
+        Seam hook: variant A reads the static distance matrix; the stochastic env
+        overrides this with an Edge-Bank lookup at the current time bin. Only a
+        (B, N) slice is produced, never the full (B, N, N) matrix.
+        """
+        idx = torch.arange(self.batch_size, device=self.coords.device)
+        return self.dist[idx, self.current_node]                   # (B, N)
+
+    def _travel_to_depot(self) -> Tensor:
+        """PLANNED travel time from every node back to the depot. (B, N). Seam hook."""
+        return self.dist[:, :, 0]                                  # (B, N)
+
+    def _travel_time(self, action: Tensor) -> Tensor:
+        """EXECUTED travel time from the current node to `action`. (B,). Seam hook.
+
+        Variant A executes exactly what it planned (time == distance); the stochastic
+        env returns a SAMPLE whose mean is the planned travel time, so an arrival that
+        the mask believed feasible can still be late.
+        """
+        idx = torch.arange(self.batch_size, device=self.coords.device)
+        return self.dist[idx, self.current_node, action]           # (B,)
+
+    def _on_arrival(self, action: Tensor, arrival: Tensor) -> None:
+        """Hook called once per step with the realised arrival time. (B,) each.
+
+        No-op for variant A: hard masking makes a late arrival impossible, so there is
+        nothing to record. The stochastic env accumulates tardiness here.
+        """
+        return None
+
     def _tw_mask(self, base_mask: Tensor) -> Tensor:
         """CVRP base mask + hard TW conditions at the current clock/node. (B, N)."""
-        idx = torch.arange(self.batch_size, device=self.coords.device)
-        travel_from_current = self.dist[idx, self.current_node]   # (B, N)
-        travel_to_depot = self.dist[:, :, 0]                       # (B, N)
         return tw_feasibility_mask(
-            base_mask, self.time, travel_from_current, travel_to_depot,
+            base_mask, self.time, self._travel_from_current(), self._travel_to_depot(),
             self.time_windows, self.service_time, self.shift_end,
         )
 
@@ -74,8 +105,9 @@ class CVRPTWEnv(CVRPEnv):
         """Advance one step: update clock, then CVRP capacity/visited, then mask."""
         idx = torch.arange(self.batch_size, device=self.coords.device)
         # Clock uses the OLD current node (super().step() will move current_node).
-        travel = self.dist[idx, self.current_node, action]        # (B,) old_current -> action
+        travel = self._travel_time(action)                        # (B,) old_current -> action
         arrival = self.time + travel                              # (B,)
+        self._on_arrival(action, arrival)                         # hook: tardiness bookkeeping
         earliest_a = self.time_windows[idx, action, 0]            # (B,)
         service_a = self.service_time[idx, action]                # (B,)
         new_time = torch.maximum(arrival, earliest_a) + service_a  # (B,) wait if early, then serve

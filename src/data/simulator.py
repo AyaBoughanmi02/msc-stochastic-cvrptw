@@ -255,20 +255,107 @@ def lookup_bin(bank: Tensor, bin_idx: Tensor) -> Tensor:
     return bank.gather(3, index).squeeze(3)                           # (B, N, N, 2)
 
 
+def _resolve_instance_idx(
+    bank: Tensor,
+    node_idx: Tensor,
+    bin_idx: Tensor,
+    instance_idx: Tensor | None,
+) -> Tensor:
+    """Validate a gather's index tensors and default `instance_idx` to the identity.
+
+    `instance_idx` maps each ROW of the query (one per trajectory) to a row of the
+    Edge Bank. It exists so a POMO batch of B*S trajectories can share a bank of only
+    B instances instead of replicating it S times. Values are NOT range-checked here
+    (that would force a device sync every step); callers check once at construction.
+    """
+    if node_idx.dim() != 1:
+        raise ValueError(f"node_idx must be 1-D, got shape {tuple(node_idx.shape)}")
+    if node_idx.dtype != torch.long:
+        raise ValueError(f"node_idx must be int64, got {node_idx.dtype}")
+    if bin_idx.shape != node_idx.shape:
+        raise ValueError(
+            f"bin_idx {tuple(bin_idx.shape)} must match node_idx {tuple(node_idx.shape)}"
+        )
+    if bin_idx.dtype != torch.long:
+        raise ValueError(f"bin_idx must be int64, got {bin_idx.dtype}")
+    if instance_idx is None:
+        if node_idx.size(0) != bank.size(0):
+            raise ValueError(
+                f"without instance_idx the query must be instance-aligned: got "
+                f"{node_idx.size(0)} rows for a bank of {bank.size(0)} instances"
+            )
+        return torch.arange(node_idx.size(0), device=bank.device)
+    if instance_idx.shape != node_idx.shape:
+        raise ValueError(
+            f"instance_idx {tuple(instance_idx.shape)} must match node_idx "
+            f"{tuple(node_idx.shape)}"
+        )
+    if instance_idx.dtype != torch.long:
+        raise ValueError(f"instance_idx must be int64, got {instance_idx.dtype}")
+    return instance_idx
+
+
+def gather_from(
+    bank: Tensor,                        # (B, N, N, K, 2)
+    node_idx: Tensor,                    # (M,) long, origin node per query row
+    bin_idx: Tensor,                     # (M,) long, time bin per query row
+    instance_idx: Tensor | None = None,  # (M,) long into the bank's batch; None = identity
+) -> Tensor:
+    """Moments FROM one origin node TO every node, at one time bin. -> (M, N, 2).
+
+    This is the env's per-step lookup: only O(M*N*K) is materialised, never the full
+    (M, N, N) matrix.
+    """
+    inst = _resolve_instance_idx(bank, node_idx, bin_idx, instance_idx)
+    m, n = node_idx.size(0), bank.size(1)
+    rows = bank[inst, node_idx]                                       # (M, N, K, 2)
+    index = bin_idx.view(m, 1, 1, 1).expand(m, n, 1, 2)               # (M, N, 1, 2)
+    return rows.gather(2, index).squeeze(2)                           # (M, N, 2)
+
+
+def gather_to(
+    bank: Tensor,                        # (B, N, N, K, 2)
+    node_idx: Tensor,                    # (M,) long, destination node per query row
+    bin_idx: Tensor,                     # (M,) long
+    instance_idx: Tensor | None = None,  # (M,) long into the bank's batch
+) -> Tensor:
+    """Moments FROM every node TO one destination node, at one time bin. -> (M, N, 2).
+
+    Written as an explicit transpose rather than reusing `gather_from` and leaning on
+    the bank's symmetry, so it stays correct if directional congestion is ever added.
+    """
+    inst = _resolve_instance_idx(bank, node_idx, bin_idx, instance_idx)
+    m, n = node_idx.size(0), bank.size(1)
+    cols = bank.transpose(1, 2)[inst, node_idx]                       # (M, N, K, 2) view
+    index = bin_idx.view(m, 1, 1, 1).expand(m, n, 1, 2)               # (M, N, 1, 2)
+    return cols.gather(2, index).squeeze(2)                           # (M, N, 2)
+
+
+def gather_edge(
+    bank: Tensor,                        # (B, N, N, K, 2)
+    from_idx: Tensor,                    # (M,) long
+    to_idx: Tensor,                      # (M,) long
+    bin_idx: Tensor,                     # (M,) long
+    instance_idx: Tensor | None = None,  # (M,) long into the bank's batch
+) -> Tensor:
+    """Moments of one traversed edge at one time bin. -> (M, 2)."""
+    inst = _resolve_instance_idx(bank, from_idx, bin_idx, instance_idx)
+    if to_idx.shape != from_idx.shape:
+        raise ValueError(
+            f"to_idx {tuple(to_idx.shape)} must match from_idx {tuple(from_idx.shape)}"
+        )
+    m = from_idx.size(0)
+    moments = bank[inst, from_idx, to_idx]                            # (M, K, 2)
+    index = bin_idx.view(m, 1, 1).expand(m, 1, 2)                     # (M, 1, 2)
+    return moments.gather(1, index).squeeze(1)                        # (M, 2)
+
+
 def lookup_row(bank: Tensor, from_idx: Tensor, bin_idx: Tensor) -> Tensor:
-    """Moments from one origin node to all nodes at a time bin -> the ENV's step lookup.
+    """Instance-aligned special case of `gather_from`.
 
     bank: (B, N, N, K, 2), from_idx: (B,) long, bin_idx: (B,) long -> (B, N, 2).
     """
-    b, n, _, _, _ = bank.shape
-    if from_idx.shape != bin_idx.shape or from_idx.dim() != 1 or from_idx.size(0) != b:
-        raise ValueError(
-            f"from_idx and bin_idx must both have shape ({b},), got "
-            f"{tuple(from_idx.shape)} and {tuple(bin_idx.shape)}"
-        )
-    rows = bank[torch.arange(b, device=bank.device), from_idx]        # (B, N, K, 2)
-    index = bin_idx.view(b, 1, 1, 1).expand(b, n, 1, 2)               # (B, N, 1, 2)
-    return rows.gather(2, index).squeeze(2)                           # (B, N, 2)
+    return gather_from(bank, from_idx, bin_idx, instance_idx=None)
 
 
 def draw_noise(
