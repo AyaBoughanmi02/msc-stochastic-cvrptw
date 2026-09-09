@@ -213,6 +213,103 @@ def stoch_calibration_stats(
 
 
 @torch.no_grad()
+def measure_pointer_saturation(
+    policy,
+    data: CVRPTWData,
+    sim_cfg: SimulatorConfig,
+    threshold: float = 8.0,
+    tight_slack: float = 0.25,
+    n_starts: int | None = None,
+    seed: int = 0,
+) -> dict[str, float]:
+    """How much of the pointer's signal is being flattened by the tanh clip.
+
+    The edge term and the variance gate are added BEFORE the tanh clip, so a candidate
+    whose pre-tanh logit u is already deep in the flat region (|u| > threshold) barely
+    moves when the gate pushes on it. This measures whether that is actually happening,
+    and specifically whether it happens where it would matter -- next to a tight window.
+
+    A candidate counts as NEAR A TIGHT WINDOW when its planned arrival leaves less than
+    `tight_slack` before the window closes: latest_j - (clock + mu_cj) <= tight_slack.
+    Masked candidates are excluded throughout; their logits are -inf and would make the
+    ratio meaningless. The depot is excluded from the tight-window slice only (its window
+    spans the whole shift, so it is never tight).
+
+    If `saturated_frac_near_tight_window` is negligible, the pre-tanh placement costs
+    nothing and `edge_bias_mode='post_tanh'` need never be tried. If it is high, that is
+    evidence the flag matters -- measured, before spending a training run on it.
+    """
+    from src.train.pomo import build_starts
+    from src.train.pomo_stoch import assert_ood_eval_mode, build_stoch_env
+
+    policy.eval()
+    assert_ood_eval_mode(policy)
+    b, n, _ = data.coords.shape
+    starts_n = (n - 1) if n_starts is None else n_starts
+    env = build_stoch_env(
+        data, sim_cfg, starts_n, tardiness_weight=0.0,
+        generator=torch.Generator(device=data.coords.device).manual_seed(seed),
+    )
+
+    enc = policy._encoder_inputs(env)
+    node_flat, global_emb = policy.encoder(
+        enc.x, enc.edge_index, enc.edge_attr, enc.batch
+    )
+    node_emb = node_flat.view(env.batch_size, n, -1)                  # (B*S, N, H)
+    cache = policy.decoder.precompute(node_emb)
+    row = torch.arange(env.batch_size, device=data.coords.device)
+
+    n_feasible = n_saturated = n_tight = n_saturated_tight = 0
+    abs_u_sum = 0.0
+    decoder = policy.decoder
+    was_recording = decoder.record_diagnostics
+    decoder.record_diagnostics = True
+    try:
+        mask = env.reset(build_starts(b, starts_n, data.coords.device))
+        for _ in range(2 * n):
+            edge_feat = policy._decoder_edge_feat(env)
+            log_p = decoder(
+                cache, global_emb, node_emb[row, env.current_node],
+                env.normalized_remaining(), mask,
+                context_extra=env.normalized_time(),
+                edge_feat=edge_feat,
+                gate_penalty=policy._gate_penalty(env, edge_feat),
+            )                                                          # (B*S, N)
+            u = decoder._last_u                                        # (B*S, N)
+            feasible = ~mask                                           # (B*S, N)
+            saturated = (u.abs() > threshold) & feasible
+
+            # Slack until the window closes, on PLANNED travel (no RNG consumed).
+            slack = env.time_windows[..., 1] - (
+                env.time.unsqueeze(1) + env._travel_from_current()
+            )                                                          # (B*S, N)
+            tight = feasible & (slack <= tight_slack)
+            tight[:, 0] = False                                        # the depot is never tight
+
+            n_feasible += int(feasible.sum())
+            n_saturated += int(saturated.sum())
+            n_tight += int(tight.sum())
+            n_saturated_tight += int((saturated & tight).sum())
+            abs_u_sum += float(u.abs()[feasible].sum())
+
+            mask, done = env.step(log_p.argmax(dim=-1))
+            if bool(done.all()):
+                break
+    finally:
+        decoder.record_diagnostics = was_recording
+        decoder._last_u = None
+
+    return {
+        "saturated_frac": n_saturated / max(n_feasible, 1),
+        "saturated_frac_near_tight_window": n_saturated_tight / max(n_tight, 1),
+        "frac_near_tight": n_tight / max(n_feasible, 1),
+        "mean_abs_u": abs_u_sum / max(n_feasible, 1),
+        "n_feasible": float(n_feasible),
+        "n_tight": float(n_tight),
+    }
+
+
+@torch.no_grad()
 def policy_tardiness_stats(
     policy,
     data: CVRPTWData,

@@ -6,6 +6,7 @@ from src.models.egat_encoder import EGATEncoder
 from src.models.pointer_decoder import PointerDecoder
 from src.models.policy import CVRPPolicy
 from src.models.cvrptw_policy import CVRPTWPolicy
+from src.models.cvrptw_stoch_policy import CVRPTWStochPolicy
 
 # Default hyperparameters for the CVRP reproduction of Lei et al. (2022).
 DEFAULT_MODEL_CONFIG: dict[str, Any] = {
@@ -20,6 +21,8 @@ DEFAULT_MODEL_CONFIG: dict[str, Any] = {
     "norm": "batch",         # encoder input norm: 'batch' (Lei), 'layer', or 'none'
     "attn": "scalar",        # attention granularity: 'scalar' (locked) or 'channel' (diagnostic)
     "context_extra_dim": 0,  # extra dynamic decoder-context scalars (CVRPTW clock = 1)
+    "edge_feat_dim": 0,      # decoder per-candidate edge features (0 CVRP/A; 2 for B/C/D)
+    "edge_bias_mode": "pre_tanh",  # 'pre_tanh' (locked) or 'post_tanh' (diagnostic)
 }
 
 
@@ -46,6 +49,8 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
         n_heads=cfg["n_heads"],
         tanh_clip=cfg["tanh_clip"],
         context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
     )
     return CVRPPolicy(encoder, decoder)
 
@@ -72,7 +77,8 @@ DEFAULT_CVRPTW_CONFIG: dict[str, Any] = {
 # reconstructing their original architecture.
 DEFAULT_CVRPTW_STOCH_CONFIG: dict[str, Any] = {
     **DEFAULT_CVRPTW_CONFIG,
-    "input_edge_dim": 2,     # (mu_bar, sigma_bar^2)
+    "input_edge_dim": 2,     # encoder: horizon-averaged (mu_bar, sigma_bar^2)
+    "edge_feat_dim": 2,      # decoder: clock-refreshed (mu, sigma^2)(tau_t)
 }
 
 
@@ -95,5 +101,38 @@ def build_cvrptw_policy(config: dict[str, Any] | None = None) -> "CVRPTWPolicy":
         n_heads=cfg["n_heads"],
         tanh_clip=cfg["tanh_clip"],
         context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
     )
     return CVRPTWPolicy(encoder, decoder)
+
+
+def build_cvrptw_stoch_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWStochPolicy":
+    """Instantiate a CVRPTWStochPolicy (variant B: 2-dim edge features in both stages).
+
+    Same certified encoder/decoder settings as variant A; only the edge dimensions move.
+    Variant D reuses this builder and adds the shared gate scalar on top.
+    """
+    cfg = {**DEFAULT_CVRPTW_STOCH_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWStochPolicy(encoder, decoder)

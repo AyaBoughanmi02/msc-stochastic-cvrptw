@@ -19,13 +19,40 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from src.data.graph_build import build_graph_tw
+from src.data.graph_build import EncoderInputs, build_graph_tw
 from src.envs.cvrptw_env import CVRPTWEnv
 from src.models.policy import CVRPPolicy
 
 
 class CVRPTWPolicy(CVRPPolicy):
     """Encoder + pointer decoder rollout policy for CVRPTW (variant A)."""
+
+    def _encoder_inputs(self, env: CVRPTWEnv) -> EncoderInputs:
+        """Graph inputs for the ONE-TIME encoding. Hook: variants B/C/D swap the edge
+        feature for the horizon-averaged (mu_bar, sigma_bar^2) moments."""
+        return build_graph_tw(env.coords, env.demand, env.time_windows, env.service_time)
+
+    def _decoder_edge_feat(self, env: CVRPTWEnv) -> Tensor | None:
+        """Per-step, per-candidate edge features for the pointer. (B, N, F) or None.
+
+        Hook: variant A has none; B/C/D return the clock-refreshed (mu, sigma^2)(tau_t)
+        of the edges leaving the current node.
+        """
+        return None
+
+    def _gate_penalty(
+        self, env: CVRPTWEnv, edge_feat: Tensor | None
+    ) -> Tensor | None:
+        """Non-negative per-candidate penalty subtracted from the pointer logit. (B, N).
+
+        Hook: None for A/B; variant D returns softplus(w) * sigma^2(tau_t). It lives on
+        the POLICY because w is shared with the encoder.
+        """
+        return None
+
+    def policy_metrics(self) -> dict[str, float]:
+        """Scalars to log alongside training stats. Hook: variant D reports softplus(w)."""
+        return {}
 
     def forward(
         self,
@@ -43,7 +70,7 @@ class CVRPTWPolicy(CVRPPolicy):
         dev = env.coords.device
 
         # --- encode once (6-dim node features: windows + service are static) ---
-        enc = build_graph_tw(env.coords, env.demand, env.time_windows, env.service_time)
+        enc = self._encoder_inputs(env)                 # hook: edge features (A: distance)
         node_flat, global_emb = self.encoder(
             enc.x, enc.edge_index, enc.edge_attr, enc.batch
         )                                       # (B*N, H), (B, H)
@@ -61,8 +88,11 @@ class CVRPTWPolicy(CVRPPolicy):
             last_node_emb = node_emb[batch_idx, env.current_node]  # (B, H)
             remaining = env.normalized_remaining()                 # (B, 1)
             clock = env.normalized_time()                          # (B, 1) dynamic clock
+            edge_feat = self._decoder_edge_feat(env)               # (B, N, F) or None
+            gate_penalty = self._gate_penalty(env, edge_feat)      # (B, N) or None
             log_p = self.decoder(
-                cache, global_emb, last_node_emb, remaining, mask, context_extra=clock
+                cache, global_emb, last_node_emb, remaining, mask, context_extra=clock,
+                edge_feat=edge_feat, gate_penalty=gate_penalty,
             )                                                      # (B, N)
 
             action = self._select(log_p, decode_type)              # (B,)  inherited

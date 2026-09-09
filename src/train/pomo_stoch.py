@@ -212,6 +212,11 @@ def train_step_stoch(
     optimizer.step()
     out_stats = {k: v / accum_steps for k, v in totals.items()}
     out_stats["grad_norm"] = float(grad_norm)
+    # Policy-owned scalars (variant D reports softplus(w); B reports nothing). Read AFTER
+    # the optimizer step so the logged value is the one the next rollout will use.
+    metrics = getattr(policy, "policy_metrics", None)
+    if callable(metrics):
+        out_stats.update({k: float(v) for k, v in metrics().items()})
     return out_stats
 
 

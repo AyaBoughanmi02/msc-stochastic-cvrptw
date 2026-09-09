@@ -219,14 +219,21 @@ def test_certified_configs_still_load_strict(config, builder, tmp_path) -> None:
         assert torch.equal(va, vb)
 
 
-def test_stoch_config_only_moves_the_edge_dim() -> None:
-    """The variant-B config is the CVRPTW config plus exactly one changed key."""
+def test_stoch_config_only_moves_the_edge_dims() -> None:
+    """The variant-B config is the CVRPTW config plus exactly the two edge widths.
+
+    input_edge_dim is the ENCODER's horizon-averaged (mu_bar, sigma_bar^2); edge_feat_dim
+    is the DECODER's clock-refreshed (mu, sigma^2)(tau_t). Nothing else about the certified
+    architecture moves.
+    """
     differing = {
         k for k in DEFAULT_CVRPTW_CONFIG
         if DEFAULT_CVRPTW_CONFIG[k] != DEFAULT_CVRPTW_STOCH_CONFIG[k]
     }
-    assert differing == {"input_edge_dim"}
+    assert differing == {"input_edge_dim", "edge_feat_dim"}
     assert DEFAULT_CVRPTW_STOCH_CONFIG["input_edge_dim"] == 2
+    assert DEFAULT_CVRPTW_STOCH_CONFIG["edge_feat_dim"] == 2
+    assert DEFAULT_CVRPTW_CONFIG["edge_feat_dim"] == 0
     # The certified defaults must not have been edited in the process.
     assert DEFAULT_MODEL_CONFIG["input_edge_dim"] == 1
     assert DEFAULT_MODEL_CONFIG["input_node_dim"] == 3
