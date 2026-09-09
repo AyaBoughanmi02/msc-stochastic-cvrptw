@@ -42,9 +42,11 @@ def decompose_infeasibility(env: CVRPTWEnv) -> InfeasibilityReasons:
     columns (verified in tests), so the diagnostic can't silently diverge from the
     mask it is explaining.
     """
-    idx = torch.arange(env.batch_size, device=env.coords.device)
-    travel_from_current = env.dist[idx, env.current_node]      # (B, N)
-    travel_to_depot = env.dist[:, :, 0]                        # (B, N)
+    # Read through the env's travel-time seam, NOT env.dist: under the stochastic env
+    # the mask is built from Edge-Bank means at the current time bin, and a diagnostic
+    # that explained it with Euclidean distance would silently disagree with it.
+    travel_from_current = env._travel_from_current()           # (B, N) planned
+    travel_to_depot = env._travel_to_depot()                   # (B, N) planned
     earliest = env.time_windows[..., 0]
     latest = env.time_windows[..., 1]
     arrival = env.time.unsqueeze(1) + travel_from_current
@@ -61,12 +63,13 @@ def decompose_infeasibility(env: CVRPTWEnv) -> InfeasibilityReasons:
 def greedy_feasible_rollout(env: CVRPTWEnv, max_steps: int | None = None) -> Tensor:
     """Roll out picking the nearest feasible node each step. Returns (B, T) actions."""
     mask = env.reset()
-    b, n = env.batch_size, env.num_nodes
+    n = env.num_nodes
     max_steps = 3 * n if max_steps is None else max_steps
-    idx = torch.arange(b, device=env.coords.device)
     actions: list[Tensor] = []
     for _ in range(max_steps):
-        d = env.dist[idx, env.current_node].masked_fill(mask, float("inf"))
+        # Nearest in PLANNED TRAVEL TIME (== distance for variant A, Edge-Bank mu at
+        # the current time bin for the stochastic env).
+        d = env._travel_from_current().masked_fill(mask, float("inf"))
         action = d.argmin(dim=1)
         actions.append(action)
         mask, done = env.step(action)
@@ -84,7 +87,6 @@ def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[st
     mask = env.reset()
     b, n = env.batch_size, env.num_nodes
     max_steps = 3 * n if max_steps is None else max_steps
-    idx = torch.arange(b, device=env.coords.device)
     cust = slice(1, None)
 
     tot_uv = time_only = cap_only = both = 0
@@ -108,10 +110,13 @@ def calibration_stats(data: CVRPTWData, max_steps: int | None = None) -> dict[st
         decisions += b
 
         # record clock utilization at genuine depot returns (served >= 1 since depot)
-        d = env.dist[idx, env.current_node].masked_fill(mask, float("inf"))
+        travel_row = env._travel_from_current()                           # (B, N) planned
+        d = travel_row.masked_fill(mask, float("inf"))
         action = d.argmin(dim=1)
         is_depot = action == 0
-        arrival_depot = env.time + env.dist[idx, env.current_node, action]  # before reset
+        # PLANNED arrival: never call env._travel_time() in a diagnostic -- that draws a
+        # sample and would consume RNG for a step we are not actually taking.
+        arrival_depot = env.time + travel_row.gather(1, action.view(-1, 1)).squeeze(1)
         real_return = is_depot & (served_since_depot > 0)
         if bool(real_return.any()):
             routes += real_return.float()
