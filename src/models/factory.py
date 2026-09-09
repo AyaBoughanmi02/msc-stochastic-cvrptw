@@ -64,6 +64,18 @@ DEFAULT_CVRPTW_CONFIG: dict[str, Any] = {
 }
 
 
+# Variants B/C/D: the encoder edge feature becomes the horizon-averaged
+# (mu_bar, sigma_bar^2) from the Edge Bank instead of a single distance, so
+# input_edge_dim goes 1 -> 2. NOTHING else changes: fc_edge.weight is the only
+# parameter in the encoder whose shape moves ((16, 1) -> (16, 2)). Existing defaults
+# are untouched, so DEFAULT_MODEL_CONFIG / DEFAULT_CVRPTW_CONFIG checkpoints keep
+# reconstructing their original architecture.
+DEFAULT_CVRPTW_STOCH_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_CONFIG,
+    "input_edge_dim": 2,     # (mu_bar, sigma_bar^2)
+}
+
+
 def build_cvrptw_policy(config: dict[str, Any] | None = None) -> "CVRPTWPolicy":
     """Instantiate a CVRPTWPolicy (6-dim node features + decoder clock scalar)."""
     cfg = {**DEFAULT_CVRPTW_CONFIG, **(config or {})}

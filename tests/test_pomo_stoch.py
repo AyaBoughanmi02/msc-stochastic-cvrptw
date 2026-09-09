@@ -242,8 +242,9 @@ def test_greedy_cost_is_best_of_n_and_paired_across_seeds() -> None:
         _RandomFeasiblePolicy(), data, cfg,
         generator=torch.Generator().manual_seed(11), **kwargs,
     )
+    reference = _RandomFeasiblePolicy().eval()   # greedy decoding requires eval mode
     full = pomo_rollout_stoch(
-        _RandomFeasiblePolicy(), data, cfg, decode_type="greedy",
+        reference, data, cfg, decode_type="greedy",
         generator=torch.Generator().manual_seed(11), **kwargs,
     )
     assert best.shape == (4,)
@@ -254,6 +255,17 @@ def test_greedy_cost_is_best_of_n_and_paired_across_seeds() -> None:
         generator=torch.Generator().manual_seed(11), **kwargs,
     )
     assert torch.equal(best, again)
+
+
+def test_greedy_decoding_refuses_train_mode() -> None:
+    """Greedy decoding under train-mode BatchNorm would silently damp an OOD shift."""
+    policy = _RandomFeasiblePolicy()
+    policy.train()
+    with pytest.raises(RuntimeError, match="train mode"):
+        pomo_rollout_stoch(
+            policy, _data(batch=2, n_customers=10, seed=13),
+            SimulatorConfig(shift_end=_SHIFT), n_starts=3, decode_type="greedy",
+        )
 
 
 def test_cost_mismatch_is_detected() -> None:

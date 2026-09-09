@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Callable, NamedTuple
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 
 from src.data.cvrptw_generator import CVRPTWData
@@ -96,6 +97,34 @@ def _resolve_n_starts(data: CVRPTWData, n_starts: int | None) -> int:
     return n_starts
 
 
+def assert_ood_eval_mode(policy) -> None:
+    """Raise unless the policy (and every BatchNorm in it) is in eval mode.
+
+    The encoder normalises its edge embedding with BatchNorm (`bn_edge`). Under an OOD
+    variance shift the input `sigma_bar^2` scales by beta_ood/beta_train, and we WANT that
+    shift to reach the network: in eval mode BN uses frozen running statistics, so it does.
+    In train mode BN would re-estimate its statistics on the shifted batch and partially
+    CANCEL the very shift the experiment is measuring -- silently, with no error and a
+    plausible-looking number at the end. Hence an assertion, not a comment.
+    """
+    if policy.training:
+        raise RuntimeError(
+            "policy is in train mode during greedy decoding; call policy.eval() first. "
+            "Under an OOD variance shift, BatchNorm in train mode re-estimates its "
+            "statistics on the shifted batch and cancels part of the shift."
+        )
+    batchnorms = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm)
+    offenders = [
+        name for name, module in policy.named_modules()
+        if isinstance(module, batchnorms) and module.training
+    ]
+    if offenders:
+        raise RuntimeError(
+            f"these BatchNorm modules are still in train mode: {offenders}; they would "
+            f"re-estimate running statistics on the evaluation distribution"
+        )
+
+
 def pomo_rollout_stoch(
     policy,                                   # CVRPTWPolicy (duck-typed; see module docs)
     data: CVRPTWData,
@@ -111,6 +140,9 @@ def pomo_rollout_stoch(
     The policy is unchanged from variant A: CVRPTWStochEnv is a CVRPTWEnv, so
     `build_graph_tw`, `normalized_time()` and the rollout loop all work as-is.
     """
+    if decode_type == "greedy":
+        # Greedy decoding is always evaluation; refuse to run it under train-mode BN.
+        assert_ood_eval_mode(policy)
     b = data.coords.size(0)
     s = _resolve_n_starts(data, n_starts)
 
