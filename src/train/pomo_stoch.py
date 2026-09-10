@@ -53,6 +53,7 @@ def build_stoch_env(
     generator: torch.Generator | None = None,
     common_random_numbers: bool = True,
     noise: Tensor | None = None,      # (B, N, N, K) pre-drawn field; None = draw one
+    reward_mode: str = "sampled",
 ) -> CVRPTWStochEnv:
     """Assemble a stochastic env with each instance replicated CONTIGUOUSLY n_starts times.
 
@@ -68,7 +69,10 @@ def build_stoch_env(
     dev = data.coords.device
 
     bank = build_edge_bank(data.coords, sim_cfg)                    # (B, N, N, K, 2)
-    if noise is None and common_random_numbers:
+    # 'analytic' never samples a travel time, so a noise field would be dead weight.
+    if reward_mode == "analytic":
+        noise = None
+    elif noise is None and common_random_numbers:
         # One realised day per instance; every start of that instance shares it.
         noise = draw_noise(
             bank.shape[:-1], device=dev, dtype=data.coords.dtype, generator=generator
@@ -88,6 +92,7 @@ def build_stoch_env(
         noise=noise,
         generator=generator,
         tardiness_weight=tardiness_weight,
+        reward_mode=reward_mode,
     )
 
 
@@ -138,6 +143,7 @@ def pomo_rollout_stoch(
     decode_type: str = "sampling",
     generator: torch.Generator | None = None,
     common_random_numbers: bool = True,
+    reward_mode: str = "sampled",
 ) -> StochRollout:
     """Run N multi-start trajectories per instance under stochastic travel times.
 
@@ -153,6 +159,7 @@ def pomo_rollout_stoch(
     env = build_stoch_env(
         data, sim_cfg, s, tardiness_weight,
         generator=generator, common_random_numbers=common_random_numbers,
+        reward_mode=reward_mode,
     )
     starts = build_starts(b, s, data.coords.device)                 # (B*S,)
     actions, sum_logp, cost = policy(env, decode_type=decode_type, force_first=starts)
@@ -183,6 +190,7 @@ def train_step_stoch(
     grad_clip: float | None = None,
     generator: torch.Generator | None = None,
     common_random_numbers: bool = True,
+    reward_mode: str = "sampled",
 ) -> dict[str, float]:
     """One POMO optimizer step over accum_steps stochastic mini-batches.
 
@@ -194,13 +202,17 @@ def train_step_stoch(
         raise ValueError(f"accum_steps must be >= 1, got {accum_steps}")
     policy.train()
     optimizer.zero_grad()
+    # late_rate counts trajectories with ANY violation; under reward_mode='analytic' the
+    # violation count is a fractional expectation and is essentially always > 0, so
+    # mean_violations is the meaningful figure there.
     totals = {"loss": 0.0, "mean_cost": 0.0, "mean_distance": 0.0,
-              "mean_tardiness": 0.0, "late_rate": 0.0}
+              "mean_tardiness": 0.0, "mean_violations": 0.0, "late_rate": 0.0}
     for _ in range(accum_steps):
         data = sample_batch()
         out = pomo_rollout_stoch(
             policy, data, sim_cfg, n_starts, tardiness_weight,
             generator=generator, common_random_numbers=common_random_numbers,
+            reward_mode=reward_mode,
         )
         loss, mean_cost = pomo_loss(out.cost, out.sum_logp)         # reused unchanged
         (loss / accum_steps).backward()
@@ -208,6 +220,7 @@ def train_step_stoch(
         totals["mean_cost"] += float(mean_cost.detach())
         totals["mean_distance"] += float(out.distance.mean().detach())
         totals["mean_tardiness"] += float(out.tardiness.mean().detach())
+        totals["mean_violations"] += float(out.late_count.mean().detach())
         totals["late_rate"] += float((out.late_count > 0).to(torch.float32).mean())
     if grad_clip is not None:
         grad_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), grad_clip)

@@ -66,6 +66,18 @@ from src.data.simulator import (
 from src.envs.cvrptw_env import CVRPTWEnv
 from src.utils.masking import _TW_EPS, tour_length  # same tolerance the mask uses
 
+_SQRT_2PI = math.sqrt(2.0 * math.pi)
+# Floor inside sqrt() so a zero-variance route (beta_var = 0) gives sd -> 0 without NaN.
+_VAR_EPS = 1e-12
+
+
+def _std_normal_pdf(z: Tensor) -> Tensor:
+    return torch.exp(-0.5 * z * z) / _SQRT_2PI
+
+
+def _std_normal_cdf(z: Tensor) -> Tensor:
+    return 0.5 * (1.0 + torch.erf(z * (0.5 ** 0.5)))
+
 
 class CVRPTWStochEnv(CVRPTWEnv):
     """CVRPTW state machine with stochastic, time-dependent travel times."""
@@ -84,9 +96,15 @@ class CVRPTWStochEnv(CVRPTWEnv):
         noise: Tensor | None = None,          # (B, N, N, K) pre-drawn CRN field
         generator: torch.Generator | None = None,
         tardiness_weight: float = 1.0,
+        reward_mode: str = "sampled",         # 'sampled' (legacy) or 'analytic' (training)
     ) -> None:
         b, n, _ = coords.shape
         dev = coords.device
+
+        if reward_mode not in ("sampled", "analytic"):
+            raise ValueError(
+                f"unknown reward_mode {reward_mode!r}; use 'sampled' or 'analytic'"
+            )
 
         if bank.dim() != 5 or bank.size(-1) != 2:
             raise ValueError(f"bank must be (B, N, N, K, 2), got {tuple(bank.shape)}")
@@ -141,12 +159,14 @@ class CVRPTWStochEnv(CVRPTWEnv):
         self.noise = noise
         self.generator = generator
         self.tardiness_weight = float(tardiness_weight)
+        self.reward_mode = reward_mode
 
         super().__init__(coords, demand, capacity, time_windows, service_time, shift_end)
 
         # Declared for clarity; set in _reset_state.
-        self.tardiness: Tensor    # (B*S,) summed lateness over the episode
-        self.late_count: Tensor   # (B*S,) number of late arrivals
+        self.tardiness: Tensor    # (B*S,) lateness (realised, or expected in analytic mode)
+        self.late_count: Tensor   # (B*S,) violations (count, or expected count)
+        self.time_var: Tensor     # (B*S,) variance of the arrival clock (analytic mode)
 
     # ------------------------------------------------------------------ state
 
@@ -156,6 +176,10 @@ class CVRPTWStochEnv(CVRPTWEnv):
         b = self.batch_size
         self.tardiness = torch.zeros(b, device=dev, dtype=dtype)      # (B*S,)
         self.late_count = torch.zeros(b, device=dev, dtype=dtype)     # (B*S,)
+        # Arrival-time variance, accumulated along the route and reset at the depot
+        # exactly like the clock. Only used by reward_mode='analytic'.
+        self.time_var = torch.zeros(b, device=dev, dtype=dtype)        # (B*S,)
+        self._arc_var = torch.zeros(b, device=dev, dtype=dtype)        # (B*S,) scratch
         self._depot_idx = torch.zeros(b, dtype=torch.long, device=dev)  # (B*S,) reused
 
     def current_bin(self) -> Tensor:
@@ -193,6 +217,11 @@ class CVRPTWStochEnv(CVRPTWEnv):
             self.bank, self.current_node, action, bin_idx, self.instance_idx
         )                                                        # (B*S, 2)
         mu, sigma2 = moments[:, MU], moments[:, SIGMA2]          # (B*S,) each
+        self._arc_var = sigma2                                   # for the analytic charge
+        if self.reward_mode == "analytic":
+            # The clock advances on the MEAN, so the route is a deterministic function of
+            # the actions. Uncertainty is priced in _on_arrival instead of rolled for.
+            return mu                                            # (B*S,)
         if self.noise is not None:
             # One realised day per instance: shared by all of that instance's POMO starts.
             z = self.noise[self.instance_idx, self.current_node, action, bin_idx]  # (B*S,)
@@ -214,9 +243,41 @@ class CVRPTWStochEnv(CVRPTWEnv):
         """
         idx = torch.arange(self.batch_size, device=self.coords.device)
         latest = self.time_windows[idx, action, 1]               # (B*S,)
+
+        if self.reward_mode == "analytic":
+            # Arrival time is approximated as Normal(arrival, time_var + arc_var): the
+            # means were accumulated by the clock, the variances are accumulated here
+            # (arc travel times are independent, so variances add). The expected lateness
+            # of a Normal above a threshold has a closed form, so BOTH terms below are
+            # deterministic functions of the route -- zero sampling noise in the reward.
+            var = self.time_var + self._arc_var                  # (B*S,)
+            sd = (var + _VAR_EPS).sqrt()                         # (B*S,)
+            excess = arrival - latest                            # (B*S,) <= 0 under the mask
+            z = excess / sd
+            # E[(A - latest)^+] = sd * phi(z) + excess * Phi(z);  P(A > latest) = Phi(z)
+            self.tardiness = (
+                self.tardiness + sd * _std_normal_pdf(z) + excess * _std_normal_cdf(z)
+            )
+            self.late_count = self.late_count + _std_normal_cdf(z)
+            self.time_var = var
+            return
+
         late = (arrival - latest).clamp_min(0.0)                 # (B*S,)
         self.tardiness = self.tardiness + late
         self.late_count = self.late_count + (late > _TW_EPS).to(self.tardiness.dtype)
+
+    def step(self, action: Tensor) -> tuple[Tensor, Tensor]:
+        """Advance one step, then reset the arrival-time variance at the depot.
+
+        The clock resets to 0 on every depot return (a fresh vehicle/shift), so the
+        uncertainty accumulated along the finished route must reset with it.
+        """
+        mask, done = super().step(action)
+        if self.reward_mode == "analytic":
+            self.time_var = torch.where(
+                action == 0, torch.zeros_like(self.time_var), self.time_var
+            )
+        return mask, done
 
     # ------------------------------------------------------------------ cost
 
@@ -225,6 +286,9 @@ class CVRPTWStochEnv(CVRPTWEnv):
 
         STATEFUL: the tardiness terms come from the rollout that produced `actions`, so
         this is only meaningful at the end of that rollout.
+
+        In reward_mode='analytic' the tardiness terms are EXPECTATIONS, so 'late_count' is
+        a fractional expected number of violations rather than an integer count.
         """
         distance = tour_length(self.coords, actions)             # (B*S,)
         penalty = self.tardiness_weight * (self.late_count + self.tardiness)

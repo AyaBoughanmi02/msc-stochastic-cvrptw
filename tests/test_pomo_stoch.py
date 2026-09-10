@@ -217,8 +217,10 @@ def test_train_step_reports_parts_and_updates_parameters() -> None:
         grad_clip=1.0, generator=torch.Generator().manual_seed(9),
     )
     assert set(stats) == {
-        "loss", "mean_cost", "mean_distance", "mean_tardiness", "late_rate", "grad_norm"
+        "loss", "mean_cost", "mean_distance", "mean_tardiness", "mean_violations",
+        "late_rate", "grad_norm",
     }
+    assert stats["mean_violations"] >= 0.0
     assert stats["mean_cost"] >= stats["mean_distance"]     # the penalty is non-negative
     assert 0.0 <= stats["late_rate"] <= 1.0
     assert not torch.equal(before, policy.scale.detach())   # the step actually stepped

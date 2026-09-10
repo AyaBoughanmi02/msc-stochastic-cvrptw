@@ -55,6 +55,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--phase-k", type=float, default=1.0, help="spatial congestion lag")
     p.add_argument("--tardiness-weight", type=float, default=2.0,
                    help="reward penalty per violation; calibrate with the sweep first")
+    p.add_argument("--reward-mode", type=str, default="analytic",
+                   choices=["analytic", "sampled"],
+                   help="analytic = expected tardiness in closed form (learnable); "
+                        "sampled = one realised day (measured to be unlearnable under POMO)")
     p.add_argument("--no-crn", action="store_true",
                    help="draw fresh noise per traversal instead of one day per instance")
     # optimisation (certified recipe)
@@ -163,7 +167,7 @@ def main() -> None:
     print(f"stochastic CVRPTW | cap {args.capacity} shift {args.shift_end} "
           f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
           f"eta {args.eta} K {args.n_bins} | tardiness_weight {args.tardiness_weight} "
-          f"| CRN {not args.no_crn} | effective batch "
+          f"| reward {args.reward_mode} | effective batch "
           f"{args.batch_size * args.accum_steps}")
 
     for step in range(1, args.steps + 1):
@@ -172,6 +176,7 @@ def main() -> None:
             accum_steps=args.accum_steps, n_starts=args.n_starts,
             tardiness_weight=args.tardiness_weight, grad_clip=args.grad_clip,
             generator=train_gen, common_random_numbers=not args.no_crn,
+            reward_mode=args.reward_mode,
         )
         if scheduler is not None:
             scheduler.step()
@@ -185,13 +190,13 @@ def main() -> None:
             extra = "".join(
                 f" | {k} {v:.4f}" for k, v in metrics.items()
                 if k not in ("loss", "mean_cost", "mean_distance", "mean_tardiness",
-                             "late_rate", "grad_norm")
+                             "mean_violations", "late_rate", "grad_norm")
             )
             print(f"step {step:5d}/{args.steps} | loss {metrics['loss']:+.4f} "
                   f"| cost {metrics['mean_cost']:.4f} "
                   f"| dist {metrics['mean_distance']:.4f} "
                   f"| tard {metrics['mean_tardiness']:.4f} "
-                  f"| late {metrics['late_rate']:.2f} "
+                  f"| viol {metrics['mean_violations']:.3f} "
                   f"| lr {optimizer.param_groups[0]['lr']:.2e} "
                   f"| {step / (time.time() - t0):.1f} it/s{extra}")
 
@@ -216,6 +221,7 @@ def main() -> None:
                      "n_customers": args.n_customers, "capacity": args.capacity,
                      "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
                      "service_time": args.service_time,
+                     "reward_mode": args.reward_mode,
                      "val_scenario_seeds": scenario_seeds,
                      "val_augment": args.val_augment,
                      "val_stats": id_stats, "ood_stats": ood_stats,
