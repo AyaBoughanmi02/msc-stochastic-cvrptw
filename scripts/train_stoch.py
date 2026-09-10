@@ -1,0 +1,232 @@
+"""Train a stochastic CVRPTW policy (variant B, later C/D) with POMO.
+
+Example:
+    python scripts/train_stoch.py --n-customers 20 --steps 800 --beta-var 0.3 \
+        --tardiness-weight 2.0 --ood-beta-var 0.6
+
+Mirrors scripts/train_cvrptw.py: same calibrated instance dials, same certified
+optimisation recipe (batch 32, lr 3e-4 + cosine to 1e-6). What it adds is the Edge Bank
+-- travel times ripple with the clock and are sampled, so the reward carries a tardiness
+penalty -- and three things that exist to keep the experiment honest:
+
+  * `--ood-beta-var` evaluates the SAME checkpoint under a shifted variance every eval
+    step, so the out-of-distribution curve is visible during training rather than
+    discovered at the end.
+  * `--gate-check-every` runs the gate chain (bank off => certified env; zeroed w_edge =>
+    variant-A pointer; empty gate slot => variant B), so drift is caught at the step it
+    appears.
+  * Validation uses FIXED scenario seeds, so every eval and every variant faces the same
+    days -- a paired comparison, not a re-roll of the weather.
+
+Run from the repo root so `src` is importable.
+"""
+
+from __future__ import annotations
+
+import argparse
+import time
+from dataclasses import asdict, replace
+from pathlib import Path
+
+import torch
+
+from src.data.cvrptw_generator import generate_cvrptw
+from src.data.simulator import SimulatorConfig, assert_ripple_reachable
+from src.eval.evaluate_stoch import evaluate_stoch
+from src.models.factory import DEFAULT_CVRPTW_STOCH_CONFIG, build_cvrptw_stoch_policy
+from src.models.gate_checks import assert_gate_chain_inert
+from src.train.pomo_stoch import train_step_stoch
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Train a stochastic CVRPTW policy with POMO")
+    # problem (calibrated dials, locked for A/B/C/D)
+    p.add_argument("--n-customers", type=int, default=20)
+    p.add_argument("--capacity", type=int, default=20, help="calibrated CVRPTW capacity")
+    p.add_argument("--shift-end", type=float, default=4.0)
+    p.add_argument("--tw-half-width", type=float, default=0.5)
+    p.add_argument("--service-time", type=float, default=0.2)
+    # simulator (the Edge Bank)
+    p.add_argument("--n-bins", type=int, default=24, help="K time bins per shift")
+    p.add_argument("--alpha", type=float, default=0.3, help="rush-hour ripple amplitude")
+    p.add_argument("--beta-var", type=float, default=0.3, help="variance scale (OOD knob)")
+    p.add_argument("--eta", type=float, default=0.6, help="reliability-field strength")
+    p.add_argument("--field-scale", type=float, default=0.3)
+    p.add_argument("--phase-k", type=float, default=1.0, help="spatial congestion lag")
+    p.add_argument("--tardiness-weight", type=float, default=2.0,
+                   help="reward penalty per violation; calibrate with the sweep first")
+    p.add_argument("--no-crn", action="store_true",
+                   help="draw fresh noise per traversal instead of one day per instance")
+    # optimisation (certified recipe)
+    p.add_argument("--steps", type=int, default=800)
+    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--accum-steps", type=int, default=1)
+    p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--weight-decay", type=float, default=1e-6)
+    p.add_argument("--lr-schedule", type=str, default="cosine", choices=["none", "cosine"])
+    p.add_argument("--min-lr", type=float, default=1e-6)
+    p.add_argument("--grad-clip", type=float, default=None)
+    p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
+    # evaluation
+    p.add_argument("--val-size", type=int, default=256)
+    p.add_argument("--val-seed", type=int, default=9999)
+    p.add_argument("--val-scenarios", type=int, default=2,
+                   help="independent days averaged per eval (fixed seeds => paired)")
+    p.add_argument("--val-augment", action="store_true",
+                   help="8x augmentation at eval (slower; off during training)")
+    p.add_argument("--eval-batch-size", type=int, default=8, help="instance chunk, for 4GB")
+    p.add_argument("--ood-beta-var", type=float, default=None,
+                   help="also evaluate under this shifted variance each eval step")
+    # run
+    p.add_argument("--device", type=str,
+                   default="cuda" if torch.cuda.is_available() else "cpu")
+    p.add_argument("--seed", type=int, default=1234)
+    p.add_argument("--eval-every", type=int, default=100)
+    p.add_argument("--log-every", type=int, default=20)
+    p.add_argument("--gate-check-every", type=int, default=200,
+                   help="0 disables the gate-chain assertions")
+    p.add_argument("--out", type=str, default="checkpoints/cvrptwB_best.pt")
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    torch.manual_seed(args.seed)
+    device = torch.device(args.device)
+
+    sim_cfg = SimulatorConfig(
+        n_bins=args.n_bins, period=args.shift_end, alpha=args.alpha,
+        beta_var=args.beta_var, phase_k=args.phase_k, shift_end=args.shift_end,
+        eta=args.eta, field_scale=args.field_scale,
+    )
+    # Crash-not-silent: a ripple this strong would make far-corner customers unservable,
+    # which breaks feasibility-by-construction and would show up as a stalled rollout.
+    assert_ripple_reachable(sim_cfg, args.service_time)
+    if not sim_cfg.is_mean_preserving:
+        raise ValueError(
+            f"period={sim_cfg.period} does not span whole cycles over shift_end="
+            f"{sim_cfg.shift_end}; the ripple would shift mean travel time and invalidate "
+            f"the instance calibration"
+        )
+
+    model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
+    policy = build_cvrptw_stoch_policy(model_config).to(device)
+    optimizer = torch.optim.Adam(
+        policy.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
+    scheduler = None
+    if args.lr_schedule == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.steps, eta_min=args.min_lr
+        )
+
+    train_gen = torch.Generator(device=device).manual_seed(args.seed)
+
+    def sample_batch():
+        return generate_cvrptw(
+            args.batch_size, args.n_customers, args.capacity,
+            service_time=args.service_time, shift_end=args.shift_end,
+            tw_half_width=args.tw_half_width, device=device,
+        )
+
+    val = generate_cvrptw(
+        args.val_size, args.n_customers, args.capacity,
+        service_time=args.service_time, shift_end=args.shift_end,
+        tw_half_width=args.tw_half_width, seed=args.val_seed, device=device,
+    )
+    scenario_seeds = tuple(range(args.val_scenarios))   # FIXED: paired across checkpoints
+    ood_cfg = (
+        replace(sim_cfg, beta_var=args.ood_beta_var)
+        if args.ood_beta_var is not None else None
+    )
+
+    def validate(cfg: SimulatorConfig) -> dict[str, float]:
+        # eval mode is REQUIRED (evaluate_stoch raises otherwise): with BatchNorm still in
+        # train mode, an OOD variance shift would be partly absorbed by re-estimated
+        # running statistics. Restored afterwards so training resumes unchanged.
+        was_training = policy.training
+        policy.eval()
+        try:
+            out = evaluate_stoch(
+                policy, val, cfg, tardiness_weight=args.tardiness_weight,
+                n_starts=args.n_starts, augment=args.val_augment,
+                eval_batch_size=args.eval_batch_size, scenario_seeds=scenario_seeds,
+            )
+        finally:
+            policy.train(was_training)
+        return {k: float(v.mean()) for k, v in out.items()}
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    best_val = float("inf")
+    t0 = time.time()
+    print(f"stochastic CVRPTW | cap {args.capacity} shift {args.shift_end} "
+          f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
+          f"eta {args.eta} K {args.n_bins} | tardiness_weight {args.tardiness_weight} "
+          f"| CRN {not args.no_crn} | effective batch "
+          f"{args.batch_size * args.accum_steps}")
+
+    for step in range(1, args.steps + 1):
+        metrics = train_step_stoch(
+            policy, optimizer, sample_batch, sim_cfg,
+            accum_steps=args.accum_steps, n_starts=args.n_starts,
+            tardiness_weight=args.tardiness_weight, grad_clip=args.grad_clip,
+            generator=train_gen, common_random_numbers=not args.no_crn,
+        )
+        if scheduler is not None:
+            scheduler.step()
+
+        if args.gate_check_every and step % args.gate_check_every == 0:
+            # Mutates nothing; raises if any stacked term stopped being inert when off.
+            assert_gate_chain_inert(policy, val, sim_cfg, seed=step)
+
+        if args.log_every and step % args.log_every == 0:
+            # softplus_w appears here for variant D via the policy_metrics hook.
+            extra = "".join(
+                f" | {k} {v:.4f}" for k, v in metrics.items()
+                if k not in ("loss", "mean_cost", "mean_distance", "mean_tardiness",
+                             "late_rate", "grad_norm")
+            )
+            print(f"step {step:5d}/{args.steps} | loss {metrics['loss']:+.4f} "
+                  f"| cost {metrics['mean_cost']:.4f} "
+                  f"| dist {metrics['mean_distance']:.4f} "
+                  f"| tard {metrics['mean_tardiness']:.4f} "
+                  f"| late {metrics['late_rate']:.2f} "
+                  f"| lr {optimizer.param_groups[0]['lr']:.2e} "
+                  f"| {step / (time.time() - t0):.1f} it/s{extra}")
+
+        if step % args.eval_every == 0 or step == args.steps:
+            id_stats = validate(sim_cfg)
+            line = (f"  [eval] step {step:5d} | val_cost {id_stats['cost']:.4f} "
+                    f"(dist {id_stats['distance']:.4f} tard {id_stats['tardiness']:.4f} "
+                    f"late {id_stats['late_count']:.2f})")
+            ood_stats = None
+            if ood_cfg is not None:
+                ood_stats = validate(ood_cfg)
+                line += (f" | OOD@{args.ood_beta_var} {ood_stats['cost']:.4f} "
+                         f"(tard {ood_stats['tardiness']:.4f})")
+
+            tag = ""
+            if id_stats["cost"] < best_val:
+                best_val = id_stats["cost"]
+                torch.save(
+                    {"model_state": policy.state_dict(), "model_config": model_config,
+                     "sim_config": asdict(sim_cfg),
+                     "tardiness_weight": args.tardiness_weight,
+                     "n_customers": args.n_customers, "capacity": args.capacity,
+                     "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
+                     "service_time": args.service_time,
+                     "val_scenario_seeds": scenario_seeds,
+                     "val_augment": args.val_augment,
+                     "val_stats": id_stats, "ood_stats": ood_stats,
+                     "val_cost": id_stats["cost"]},
+                    out_path,
+                )
+                tag = "  <- saved best"
+            print(line + f" | best {best_val:.4f}{tag}")
+
+    print(f"done. best val_cost {best_val:.4f}. checkpoint: {out_path}")
+
+
+if __name__ == "__main__":
+    main()

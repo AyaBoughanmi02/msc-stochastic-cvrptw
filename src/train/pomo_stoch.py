@@ -52,19 +52,23 @@ def build_stoch_env(
     tardiness_weight: float,
     generator: torch.Generator | None = None,
     common_random_numbers: bool = True,
+    noise: Tensor | None = None,      # (B, N, N, K) pre-drawn field; None = draw one
 ) -> CVRPTWStochEnv:
     """Assemble a stochastic env with each instance replicated CONTIGUOUSLY n_starts times.
 
     The geometric tensors are replicated (the policy needs one row per trajectory); the
     Edge Bank is NOT, and neither is the noise field -- both stay at instance granularity
     and are addressed through `instance_idx`.
+
+    `noise` lets the caller supply the realised day instead of drawing one. Evaluation
+    uses it to give all 8 augmentations of an instance the SAME day, so "best over
+    augmentations" selects the best route rather than the luckiest weather.
     """
     b, n, _ = data.coords.shape
     dev = data.coords.device
 
     bank = build_edge_bank(data.coords, sim_cfg)                    # (B, N, N, K, 2)
-    noise = None
-    if common_random_numbers:
+    if noise is None and common_random_numbers:
         # One realised day per instance; every start of that instance shares it.
         noise = draw_noise(
             bank.shape[:-1], device=dev, dtype=data.coords.dtype, generator=generator
