@@ -20,21 +20,48 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_train_stoch_runs_and_saves_a_reproducible_checkpoint(tmp_path) -> None:
-    out = tmp_path / "smoke.pt"
+def _run_script(script: str, *args: str) -> subprocess.CompletedProcess:
+    """Run a script in a subprocess and fail with a READABLE message if it misbehaves.
+
+    A script that is empty or missing its `if __name__ == "__main__"` block exits 0 and
+    prints nothing, which otherwise surfaces as an opaque `assert "..." in ''`. Check the
+    file is complete first, and always report captured output on failure.
+    """
+    path = REPO_ROOT / script
+    assert path.exists(), f"{script} does not exist"
+    source = path.read_text(encoding="utf-8")
+    assert source.strip(), f"{script} is empty -- the file was not saved correctly"
+    assert 'if __name__ == "__main__":' in source, (
+        f"{script} has no `if __name__ == \"__main__\":` block, so running it does "
+        f"nothing and exits 0 silently -- the file is probably truncated"
+    )
+
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    # -u: unbuffered, so output is captured even if the process is killed by the timeout.
     result = subprocess.run(
-        [
-            sys.executable, "scripts/train_stoch.py",
-            "--n-customers", "8", "--steps", "4", "--batch-size", "4",
-            "--val-size", "8", "--val-scenarios", "1", "--n-starts", "3",
-            "--eval-every", "2", "--log-every", "2", "--gate-check-every", "2",
-            "--eval-batch-size", "4", "--beta-var", "0.3", "--ood-beta-var", "0.6",
-            "--tardiness-weight", "2.0", "--device", "cpu", "--out", str(out),
-        ],
+        [sys.executable, "-u", script, *args],
         cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=900,
     )
-    assert result.returncode == 0, result.stderr[-3000:]
+    detail = (
+        f"\n--- exit code {result.returncode} ---"
+        f"\n--- stdout ---\n{result.stdout[-3000:]}"
+        f"\n--- stderr ---\n{result.stderr[-3000:]}"
+    )
+    assert result.returncode == 0, detail
+    assert result.stdout.strip(), f"{script} produced no output at all.{detail}"
+    return result
+
+
+def test_train_stoch_runs_and_saves_a_reproducible_checkpoint(tmp_path) -> None:
+    out = tmp_path / "smoke.pt"
+    result = _run_script(
+        "scripts/train_stoch.py",
+        "--n-customers", "8", "--steps", "4", "--batch-size", "4",
+        "--val-size", "8", "--val-scenarios", "1", "--n-starts", "3",
+        "--eval-every", "2", "--log-every", "2", "--gate-check-every", "2",
+        "--eval-batch-size", "4", "--beta-var", "0.3", "--ood-beta-var", "0.6",
+        "--tardiness-weight", "2.0", "--device", "cpu", "--out", str(out),
+    )
     assert "[eval]" in result.stdout
     assert "OOD@0.6" in result.stdout            # the shifted readout is produced
     assert out.exists()
@@ -63,28 +90,75 @@ def test_train_stoch_refuses_an_unreachable_ripple(tmp_path) -> None:
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
     result = subprocess.run(
         [
-            sys.executable, "scripts/train_stoch.py",
+            sys.executable, "-u", "scripts/train_stoch.py",
             "--n-customers", "8", "--steps", "1", "--batch-size", "2",
             "--val-size", "2", "--alpha", "0.5", "--device", "cpu",
             "--out", str(tmp_path / "never.pt"),
         ],
         cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=900,
     )
-    assert result.returncode != 0
+    assert result.returncode != 0, "an unreachable ripple should abort the run"
     assert "reachability floor" in (result.stderr + result.stdout)
 
 
 def test_calibrate_tardiness_runs_and_reports_a_weight(tmp_path) -> None:
     """The calibration entry point must run and print a usable recommendation."""
+    result = _run_script(
+        "scripts/calibrate_tardiness.py",
+        "--n-customers", "20", "--batch-size", "16",
+        "--beta-var", "0.3", "--device", "cpu",
+    )
+    assert "penalty share by weight" in result.stdout, result.stdout[-3000:]
+    assert "--tardiness-weight" in result.stdout, result.stdout[-3000:]
+
+
+def test_check_trained_reports_the_full_verification(tmp_path) -> None:
+    """Train a tiny checkpoint, then verify the post-training checker reads it back.
+
+    Covers the handoff that would otherwise only be exercised after a real 800-step run:
+    the checkpoint must carry enough to rebuild the policy AND the exact simulator, and the
+    checker must produce the gate-chain verdict, the ID/OOD table and the level-2
+    calibration from it alone.
+    """
+    ckpt = tmp_path / "tiny_b.pt"
+    _run_script(
+        "scripts/train_stoch.py",
+        "--n-customers", "8", "--steps", "2", "--batch-size", "4",
+        "--val-size", "4", "--val-scenarios", "1", "--n-starts", "3",
+        "--eval-every", "2", "--log-every", "2", "--gate-check-every", "0",
+        "--eval-batch-size", "4", "--beta-var", "0.3", "--tardiness-weight", "2",
+        "--device", "cpu", "--out", str(ckpt),
+    )
+    result = _run_script(
+        "scripts/check_trained.py",
+        "--checkpoint", str(ckpt), "--test-size", "8", "--scenarios", "1",
+        "--n-starts", "3", "--eval-batch-size", "4", "--ood-beta-var", "0.6",
+        "--no-augment", "--skip-saturation", "--device", "cpu",
+    )
+    assert "gate chain: PASS" in result.stdout
+    assert "ID / OOD" in result.stdout
+    assert "(ID)" in result.stdout                      # the training-variance row
+    assert "calibration under the TRAINED policy" in result.stdout
+    assert "penalty share at the trained weight" in result.stdout
+
+
+def test_check_trained_rejects_a_variant_a_checkpoint(tmp_path) -> None:
+    """A deterministic checkpoint has no simulator, so it cannot be verified this way."""
+    import torch
+
+    from src.models.factory import DEFAULT_CVRPTW_CONFIG, build_cvrptw_policy
+
+    path = tmp_path / "variant_a.pt"
+    torch.save(
+        {"model_state": build_cvrptw_policy().state_dict(),
+         "model_config": DEFAULT_CVRPTW_CONFIG},
+        path,
+    )
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
     result = subprocess.run(
-        [
-            sys.executable, "scripts/calibrate_tardiness.py",
-            "--n-customers", "20", "--batch-size", "16",
-            "--beta-var", "0.3", "--device", "cpu",
-        ],
+        [sys.executable, "-u", "scripts/check_trained.py", "--checkpoint", str(path),
+         "--device", "cpu"],
         cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=900,
     )
-    assert result.returncode == 0, result.stderr[-3000:]
-    assert "penalty share by weight" in result.stdout
-    assert "--tardiness-weight" in result.stdout      # a concrete suggestion was printed
+    assert result.returncode != 0
+    assert "sim_config" in result.stderr
