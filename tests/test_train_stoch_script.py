@@ -72,3 +72,19 @@ def test_train_stoch_refuses_an_unreachable_ripple(tmp_path) -> None:
     )
     assert result.returncode != 0
     assert "reachability floor" in (result.stderr + result.stdout)
+
+
+def test_calibrate_tardiness_runs_and_reports_a_weight(tmp_path) -> None:
+    """The calibration entry point must run and print a usable recommendation."""
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    result = subprocess.run(
+        [
+            sys.executable, "scripts/calibrate_tardiness.py",
+            "--n-customers", "20", "--batch-size", "16",
+            "--beta-var", "0.3", "--device", "cpu",
+        ],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=900,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert "penalty share by weight" in result.stdout
+    assert "--tardiness-weight" in result.stdout      # a concrete suggestion was printed
