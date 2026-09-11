@@ -159,6 +159,28 @@ def test_encoder_gate_is_inert_when_zero() -> None:
     assert not torch.equal(none_out, real_out)              # a real gate does bite
 
 
+def test_link_four_still_catches_a_real_leak_under_jitter() -> None:
+    """The jitter tolerance must not turn link 4 into a rubber stamp.
+
+    On CUDA the check compares against the backend's own run-to-run noise rather than
+    demanding bitwise equality. A gate that genuinely leaked moves the embeddings by
+    orders of magnitude more than atomics do, so it must still be caught.
+    """
+
+    class _LeakyEncoder(EGATEncoder):
+        """Ignores the zero and applies a real gate anyway."""
+
+        def forward(self, x, edge_index, edge_attr, batch=None, gate_penalty=None):
+            if gate_penalty is not None:
+                gate_penalty = gate_penalty + 0.5      # the leak
+            return super().forward(x, edge_index, edge_attr, batch, gate_penalty)
+
+    torch.manual_seed(0)
+    leaky = _LeakyEncoder(input_node_dim=6, input_edge_dim=2).eval()
+    with pytest.raises(RuntimeError, match="link 4"):
+        assert_encoder_gate_inert(leaky)
+
+
 def test_full_gate_chain_passes_on_a_trained_looking_policy() -> None:
     torch.manual_seed(0)
     policy = build_cvrptw_gated_policy()

@@ -141,12 +141,24 @@ def assert_encoder_gate_inert(
     encoder: EGATEncoder,
     n_nodes: int = 6,
     seed: int = 0,
+    jitter_tolerance: float = 8.0,
 ) -> None:
-    """Link 4: an all-zero encoder gate must be bitwise identical to no gate at all.
+    """Link 4: an all-zero encoder gate must change nothing about the node embeddings.
 
-    Runs a small fully-connected graph (the Lei convention, self-loops included) through
-    the encoder twice. Touches nothing and allocates nothing persistent, so it is safe to
-    call at any point during training.
+    Arithmetically the guarantee is exact -- `score - 0.0` IS `score` -- so on a
+    deterministic backend this is a bitwise assertion.
+
+    On CUDA it cannot be. PyG's `softmax` and `global_mean_pool` are scatter reductions
+    that sum with atomics, so the order of floating-point additions varies between calls
+    and running the SAME computation twice already differs in the last bits. Demanding
+    bitwise equality there would fail on hardware rather than on a bug.
+
+    So the check first measures that backend jitter (two identical ungated calls), then
+    requires the zero-gated call to deviate by no more than `jitter_tolerance` times it.
+    Bitwise when the backend is exact; otherwise indistinguishable-from-noise. A gate that
+    genuinely leaked would move the embeddings by orders of magnitude more than atomics do.
+
+    Touches nothing and allocates nothing persistent, so it is safe to call during training.
     """
     dev = encoder.fc_node.weight.device
     dtype = encoder.fc_node.weight.dtype
@@ -165,16 +177,31 @@ def assert_encoder_gate_inert(
     encoder.eval()                     # BatchNorm would otherwise update between calls
     try:
         ungated, _ = encoder(x, edge_index, edge_attr)
+        repeat, _ = encoder(x, edge_index, edge_attr)        # same call: jitter baseline
         zeroed, _ = encoder(
             x, edge_index, edge_attr,
             gate_penalty=torch.zeros(n_edges, device=dev, dtype=dtype),
         )
     finally:
         encoder.train(was_training)
-    if not torch.equal(ungated, zeroed):
+
+    if torch.equal(ungated, repeat):                         # deterministic backend
+        if not torch.equal(ungated, zeroed):
+            raise RuntimeError(
+                "gate chain link 4 broken: a zero encoder gate changed the node "
+                "embeddings bitwise, on a backend where repeating the same call does "
+                "not. Variant D would not reduce to variant B with the gate off."
+            )
+        return
+
+    baseline = float((ungated - repeat).abs().max())         # backend's own jitter
+    delta = float((ungated - zeroed).abs().max())
+    if delta > jitter_tolerance * baseline:
         raise RuntimeError(
-            "gate chain link 4 broken: a zero encoder gate changed the node embeddings, "
-            "so variant D would not reduce to variant B when the gate is off"
+            f"gate chain link 4 broken: a zero encoder gate moved the node embeddings by "
+            f"{delta:.3e}, more than {jitter_tolerance}x this backend's own run-to-run "
+            f"jitter of {baseline:.3e}. Variant D would not reduce to variant B with the "
+            f"gate off."
         )
 
 
