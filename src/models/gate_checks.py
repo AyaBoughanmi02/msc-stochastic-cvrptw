@@ -14,6 +14,8 @@ What IS exactly provable is a CHAIN, each link bitwise:
   2. DECODER -- with w_edge zeroed, the variant-B pointer equals the variant-A pointer
                 (edge_feat_dim = 0) for ANY edge features.
   3. GATE    -- with gate_penalty zeroed (or None), variant D's pointer equals variant B's.
+  4. ENCODER -- with the encoder gate zeroed (or None), variant D's encoder equals
+                variant B's, for ANY graph. This guards the final certified-file edit.
 
 Stacking B then D can therefore only change behaviour through terms that are switched on,
 never through drift. Cheap enough to call periodically from a training loop; links 2 and 3
@@ -32,6 +34,7 @@ from src.data.cvrptw_generator import CVRPTWData
 from src.data.simulator import SimulatorConfig, build_edge_bank, draw_noise
 from src.envs.cvrptw_env import CVRPTWEnv
 from src.envs.cvrptw_stoch_env import CVRPTWStochEnv
+from src.models.egat_encoder import EGATEncoder
 from src.models.pointer_decoder import PointerDecoder
 
 
@@ -133,6 +136,48 @@ def assert_decoder_terms_inert(
             )
 
 
+@torch.no_grad()
+def assert_encoder_gate_inert(
+    encoder: EGATEncoder,
+    n_nodes: int = 6,
+    seed: int = 0,
+) -> None:
+    """Link 4: an all-zero encoder gate must be bitwise identical to no gate at all.
+
+    Runs a small fully-connected graph (the Lei convention, self-loops included) through
+    the encoder twice. Touches nothing and allocates nothing persistent, so it is safe to
+    call at any point during training.
+    """
+    dev = encoder.fc_node.weight.device
+    dtype = encoder.fc_node.weight.dtype
+    gen = torch.Generator(device=dev).manual_seed(seed)
+    idx = torch.arange(n_nodes, device=dev)
+    edge_index = torch.stack(
+        [idx.repeat_interleave(n_nodes), idx.repeat(n_nodes)], dim=0
+    )                                                              # (2, N*N)
+    n_edges = edge_index.size(1)
+    x = torch.rand(n_nodes, encoder.fc_node.in_features,
+                   generator=gen, device=dev, dtype=dtype)
+    edge_attr = torch.rand(n_edges, encoder.fc_edge.in_features,
+                           generator=gen, device=dev, dtype=dtype)
+
+    was_training = encoder.training
+    encoder.eval()                     # BatchNorm would otherwise update between calls
+    try:
+        ungated, _ = encoder(x, edge_index, edge_attr)
+        zeroed, _ = encoder(
+            x, edge_index, edge_attr,
+            gate_penalty=torch.zeros(n_edges, device=dev, dtype=dtype),
+        )
+    finally:
+        encoder.train(was_training)
+    if not torch.equal(ungated, zeroed):
+        raise RuntimeError(
+            "gate chain link 4 broken: a zero encoder gate changed the node embeddings, "
+            "so variant D would not reduce to variant B when the gate is off"
+        )
+
+
 def assert_env_reduces_to_variant_a(
     data: CVRPTWData,
     sim_cfg: SimulatorConfig,
@@ -191,3 +236,4 @@ def assert_gate_chain_inert(
     """All three links. Call periodically from the training loop and in the test suite."""
     assert_env_reduces_to_variant_a(data, sim_cfg, seed=seed)
     assert_decoder_terms_inert(policy.decoder, seed=seed)
+    assert_encoder_gate_inert(policy.encoder, seed=seed)

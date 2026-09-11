@@ -6,6 +6,7 @@ from src.models.egat_encoder import EGATEncoder
 from src.models.pointer_decoder import PointerDecoder
 from src.models.policy import CVRPPolicy
 from src.models.cvrptw_policy import CVRPTWPolicy
+from src.models.cvrptw_gated_policy import DEFAULT_GATE_INIT, CVRPTWGatedPolicy
 from src.models.cvrptw_stoch_policy import CVRPTWStochPolicy
 
 # Default hyperparameters for the CVRP reproduction of Lei et al. (2022).
@@ -136,3 +137,44 @@ def build_cvrptw_stoch_policy(
         edge_bias_mode=cfg["edge_bias_mode"],
     )
     return CVRPTWStochPolicy(encoder, decoder)
+
+
+# Variant D: variant B plus ONE shared scalar for the monotone variance gate. The
+# architecture is otherwise byte-identical to B, which is what makes the ablation worth
+# exactly one parameter.
+DEFAULT_CVRPTW_GATED_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_STOCH_CONFIG,
+    "gate_init": DEFAULT_GATE_INIT,   # softplus(0) = 0.6931; see cvrptw_gated_policy
+}
+
+
+def build_cvrptw_gated_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWGatedPolicy":
+    """Instantiate a CVRPTWGatedPolicy (variant D: variant B + the shared variance gate).
+
+    NOTE: gate_w needs its own optimizer group (higher lr, no weight decay) or the gate
+    cannot travel far enough in 800 steps for the experiment to be informative --
+    see build_optimizer in src/train/pomo_stoch.py.
+    """
+    cfg = {**DEFAULT_CVRPTW_GATED_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWGatedPolicy(encoder, decoder, gate_init=cfg["gate_init"])

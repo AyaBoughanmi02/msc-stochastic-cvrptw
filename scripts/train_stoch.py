@@ -33,9 +33,14 @@ import torch
 from src.data.cvrptw_generator import generate_cvrptw
 from src.data.simulator import SimulatorConfig, assert_ripple_reachable
 from src.eval.evaluate_stoch import evaluate_stoch
-from src.models.factory import DEFAULT_CVRPTW_STOCH_CONFIG, build_cvrptw_stoch_policy
+from src.models.factory import (
+    DEFAULT_CVRPTW_GATED_CONFIG,
+    DEFAULT_CVRPTW_STOCH_CONFIG,
+    build_cvrptw_gated_policy,
+    build_cvrptw_stoch_policy,
+)
 from src.models.gate_checks import assert_gate_chain_inert
-from src.train.pomo_stoch import train_step_stoch
+from src.train.pomo_stoch import build_optimizer, train_step_stoch
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,6 +76,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-lr", type=float, default=1e-6)
     p.add_argument("--grad-clip", type=float, default=None)
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
+    # variant
+    p.add_argument("--variant", type=str, default="b", choices=["b", "d"],
+                   help="b = (mu, sigma^2) edge features, no gate; "
+                        "d = b plus the shared monotone variance gate")
+    p.add_argument("--gate-init", type=float, default=0.0,
+                   help="variant D: initial w; softplus(0)=0.693 starts D as ~B")
+    p.add_argument("--gate-lr", type=float, default=1e-2,
+                   help="variant D: dedicated lr for the single gate scalar. At the global "
+                        "3e-4 the gate could not travel far enough in 800 steps for the "
+                        "experiment to be informative in either direction")
     # evaluation
     p.add_argument("--val-size", type=int, default=256)
     p.add_argument("--val-seed", type=int, default=9999)
@@ -113,10 +128,15 @@ def main() -> None:
             f"the instance calibration"
         )
 
-    model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
-    policy = build_cvrptw_stoch_policy(model_config).to(device)
-    optimizer = torch.optim.Adam(
-        policy.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    if args.variant == "d":
+        model_config = {**DEFAULT_CVRPTW_GATED_CONFIG, "gate_init": args.gate_init}
+        policy = build_cvrptw_gated_policy(model_config).to(device)
+    else:
+        model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
+        policy = build_cvrptw_stoch_policy(model_config).to(device)
+    # The gate scalar gets its own group (higher lr, no weight decay); see build_optimizer.
+    optimizer = build_optimizer(
+        policy, lr=args.lr, weight_decay=args.weight_decay, gate_lr=args.gate_lr
     )
     scheduler = None
     if args.lr_schedule == "cosine":
@@ -164,6 +184,9 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     best_val = float("inf")
     t0 = time.time()
+    gate_note = (f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
+                 if args.variant == "d" else "")
+    print(f"variant {args.variant.upper()}{gate_note}")
     print(f"stochastic CVRPTW | cap {args.capacity} shift {args.shift_end} "
           f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
           f"eta {args.eta} K {args.n_bins} | tardiness_weight {args.tardiness_weight} "
@@ -221,7 +244,10 @@ def main() -> None:
                      "n_customers": args.n_customers, "capacity": args.capacity,
                      "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
                      "service_time": args.service_time,
-                     "reward_mode": args.reward_mode,
+                     "reward_mode": args.reward_mode, "variant": args.variant,
+                     "gate_lr": args.gate_lr,
+                     "policy_metrics": (policy.policy_metrics()
+                                        if hasattr(policy, "policy_metrics") else {}),
                      "val_scenario_seeds": scenario_seeds,
                      "val_augment": args.val_augment,
                      "val_stats": id_stats, "ood_stats": ood_stats,

@@ -106,6 +106,46 @@ def _resolve_n_starts(data: CVRPTWData, n_starts: int | None) -> int:
     return n_starts
 
 
+GATE_PARAM_NAME = "gate_w"
+
+
+def build_optimizer(
+    policy,
+    lr: float,
+    weight_decay: float,
+    gate_lr: float,
+    gate_weight_decay: float = 0.0,
+) -> torch.optim.Adam:
+    """Adam with the variance gate in its OWN parameter group. Returns the optimizer.
+
+    This is not a tuning nicety -- it decides whether the experiment can answer its
+    question. Adam moves a parameter by at most ~lr per step, so at the certified
+    lr=3e-4 with cosine decay the scalar w could travel only ~0.12 over 800 steps. From
+    any small initialisation the gate would stay small no matter what the data said, and
+    "D ties B" would be an artefact of the step size rather than a finding about variance
+    gating -- a false negative on the thesis's central claim.
+
+    A dedicated gate_lr (1e-2) lets w travel several units, so BOTH a strong gate
+    (softplus(w) ~ 4) and an effectively-disabled one (~0.02) are reachable and the result
+    is informative either way.
+
+    Weight decay is set to ZERO on the gate group: decay pulls w -> 0, i.e. toward
+    softplus(w) = 0.693, an arbitrary attractor that would bias the headline parameter
+    toward a value with no meaning.
+    """
+    gate = [p for name, p in policy.named_parameters() if name == GATE_PARAM_NAME]
+    base = [p for name, p in policy.named_parameters() if name != GATE_PARAM_NAME]
+    groups: list[dict] = [
+        {"params": base, "lr": lr, "weight_decay": weight_decay, "name": "base"}
+    ]
+    if gate:   # variants A/B/C have no gate parameter; the group is simply absent
+        groups.append(
+            {"params": gate, "lr": gate_lr, "weight_decay": gate_weight_decay,
+             "name": "gate"}
+        )
+    return torch.optim.Adam(groups)
+
+
 def assert_ood_eval_mode(policy) -> None:
     """Raise unless the policy (and every BatchNorm in it) is in eval mode.
 

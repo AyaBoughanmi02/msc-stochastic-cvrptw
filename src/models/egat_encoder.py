@@ -119,16 +119,29 @@ class EGATLayer(MessagePassing):
         edge_index: Tensor,   # (2, num_edges)  row 0 = source j, row 1 = target i
         edge_attr: Tensor,    # (num_edges, edge_dim)  frozen edge embedding
         return_attention_weights: bool = False,
+        gate_penalty: Tensor | None = None,  # (num_edges,) softplus(w)*sigma^2, variant D
     ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]:
-        """Return updated node features (num_nodes, hidden_dim)."""
+        """Return updated node features (num_nodes, hidden_dim).
+
+        gate_penalty is the variance gate of variant D, subtracted from the pre-softmax
+        score (see `message`). The scalar w it is built from is owned by the POLICY and
+        shared with the decoder pointer, so this layer holds no gate parameter of its own.
+        None (the default) reproduces variants A/B/C exactly.
+        """
         if self.attn == "scalar":
             h = self.lin_node(x).view(-1, self.n_heads, self.head_dim)          # (N,H,hd)
             e = self.lin_edge(edge_attr).view(-1, self.n_heads, self.head_dim)  # (E,H,hd)
-            out = self.propagate(edge_index, x=h, edge=e)                       # (N,H,hd)
+            out = self.propagate(edge_index, x=h, edge=e, gate=gate_penalty)    # (N,H,hd)
             out = out.reshape(-1, self.hidden_dim)                              # (N,hidden)
         else:  # channel: flat, raw edge concatenated into the attention Linear
+            if gate_penalty is not None:
+                raise ValueError(
+                    "attn='channel' produces a per-channel attention VECTOR, so there is "
+                    "no scalar pre-softmax logit for the variance gate to subtract from; "
+                    "use attn='scalar' (the locked setting) for variants C/D"
+                )
             h = self.lin_node(x)                                               # (N,hidden)
-            out = self.propagate(edge_index, x=h, edge=edge_attr)              # (N,hidden)
+            out = self.propagate(edge_index, x=h, edge=edge_attr, gate=None)   # (N,hidden)
 
         if return_attention_weights:
             alpha = self._alpha
@@ -143,6 +156,7 @@ class EGATLayer(MessagePassing):
         x_i: Tensor,          # (E,H,hd) scalar | (E,hidden) channel  target (i)
         x_j: Tensor,          # source (j), same shape as x_i
         edge: Tensor,         # (E,H,hd) scalar | (E,edge_dim) channel
+        gate: Tensor | None,  # (E,) variance-gate penalty, or None (variants A/B/C)
         index: Tensor,        # (E,)  target index i (softmax groups)
         size_i: int | None,   # number of target nodes
     ) -> Tensor:
@@ -150,6 +164,12 @@ class EGATLayer(MessagePassing):
         if self.attn == "scalar":
             # scalar score per head; LeakyReLU OUTSIDE => GAT-v1 (static)
             score = F.leaky_relu((cat * self.att).sum(dim=-1), self.negative_slope)  # (E,H)
+            if gate is not None:
+                # Variant D: u_ij = score_ij - softplus(w) * sigma^2_ij, LOG-ADDITIVE and
+                # PRE-SOFTMAX. One penalty per edge, broadcast over all H heads (a single
+                # shared scalar w; per-head gating was dropped variant G). With gate=None
+                # the statements below are identical to the ungated path.
+                score = score - gate.unsqueeze(-1)                              # (E,1)->(E,H)
             alpha = softmax(score, index, num_nodes=size_i)                    # (E,H) over j
             self._alpha = alpha
             return x_j * alpha.unsqueeze(-1)                                   # (E,H,hd)
@@ -203,17 +223,37 @@ class EGATEncoder(nn.Module):
         edge_index: Tensor,   # (2, num_edges)
         edge_attr: Tensor,    # (num_edges, input_edge_dim)
         batch: Tensor | None = None,  # (num_nodes,) graph id per node; None => 1 graph
+        gate_penalty: Tensor | None = None,  # (num_edges,) variant-D variance gate
     ) -> tuple[Tensor, Tensor]:
         """Return (node_emb, global_emb).
 
         node_emb:   (num_nodes, hidden_dim)
         global_emb: (num_graphs, hidden_dim)  per-graph mean of node embeddings
+
+        gate_penalty (variant D) is softplus(w) * sigma_bar^2 per edge, computed by the
+        POLICY from the single shared scalar w. Like the edge embedding it is computed
+        once and handed unchanged to every layer -- the gate is a property of the EDGE,
+        not of the layer (static-edges lock). None reproduces variants A/B/C exactly.
         """
+        if gate_penalty is not None:
+            if gate_penalty.shape != (edge_index.size(1),):
+                raise ValueError(
+                    f"gate_penalty must be ({edge_index.size(1)},) -- one scalar per edge "
+                    f"-- got {tuple(gate_penalty.shape)}"
+                )
+            if gate_penalty.device != x.device:
+                raise ValueError(
+                    f"gate_penalty is on {gate_penalty.device} but x is on {x.device}"
+                )
         h = self.bn_node(self.fc_node(x))          # (num_nodes, hidden)  project once
         # Edge embedding computed ONCE and reused (frozen) by every layer.
         e = self.bn_edge(self.fc_edge(edge_attr))  # (num_edges, hidden_edge)
         for layer in self.layers:
-            h = h + layer(h, edge_index, e)        # residual (Eq. 3.6); same frozen e
+            h = h + layer(h, edge_index, e, gate_penalty=gate_penalty)  # residual (Eq. 3.6)
+        if batch is None:
+            batch = h.new_zeros(h.size(0), dtype=torch.long)  # single graph
+        global_emb = global_mean_pool(h, batch)    # (num_graphs, hidden)
+        return h, global_emb
         if batch is None:
             batch = h.new_zeros(h.size(0), dtype=torch.long)  # single graph
         global_emb = global_mean_pool(h, batch)    # (num_graphs, hidden)

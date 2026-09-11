@@ -50,6 +50,17 @@ class CVRPTWPolicy(CVRPPolicy):
         """
         return None
 
+    def _encoder_gate_penalty(
+        self, env: CVRPTWEnv, enc: EncoderInputs
+    ) -> Tensor | None:
+        """Per-edge variance-gate penalty for the ONE-TIME encoding. (num_edges,) or None.
+
+        Hook: None for A/B/C; variant D returns softplus(w) * sigma_bar^2, built from the
+        single shared scalar the POLICY owns. Taken from `enc.edge_attr` itself so the
+        penalty and the graph cannot disagree about edge ordering.
+        """
+        return None
+
     def policy_metrics(self) -> dict[str, float]:
         """Scalars to log alongside training stats. Hook: variant D reports softplus(w)."""
         return {}
@@ -71,8 +82,9 @@ class CVRPTWPolicy(CVRPPolicy):
 
         # --- encode once (6-dim node features: windows + service are static) ---
         enc = self._encoder_inputs(env)                 # hook: edge features (A: distance)
+        gate = self._encoder_gate_penalty(env, enc)     # (B*N*N,) or None
         node_flat, global_emb = self.encoder(
-            enc.x, enc.edge_index, enc.edge_attr, enc.batch
+            enc.x, enc.edge_index, enc.edge_attr, enc.batch, gate_penalty=gate
         )                                       # (B*N, H), (B, H)
         node_emb = node_flat.view(b, n, -1)     # (B, N, H)
         cache = self.decoder.precompute(node_emb)
