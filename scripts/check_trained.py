@@ -42,8 +42,9 @@ from src.envs.cvrptw_stoch_diagnostics import (
     policy_tardiness_stats,
 )
 from src.eval.evaluate_stoch import evaluate_stoch
-from src.models.factory import build_cvrptw_stoch_policy
+from src.models.factory import build_cvrptw_gated_policy, build_cvrptw_stoch_policy
 from src.models.gate_checks import assert_gate_chain_inert
+from src.train.pomo_stoch import GATE_PARAM_NAME
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,7 +67,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def _load(path: str, device: torch.device):
-    """Rebuild the policy AND the simulator the checkpoint was trained under."""
+    """Rebuild the policy AND the simulator the checkpoint was trained under.
+
+    The variant is inferred from the SAVED WEIGHTS, not from a flag: a variant-D
+    checkpoint carries the gate scalar `gate_w`, a variant-B one does not. Reading it off
+    the state_dict means an older checkpoint without a 'variant' key still loads, and a
+    mislabelled one cannot be silently rebuilt as the wrong architecture.
+    """
     blob = torch.load(path, map_location="cpu", weights_only=False)
     for key in ("model_state", "model_config", "sim_config", "tardiness_weight"):
         if key not in blob:
@@ -74,16 +81,18 @@ def _load(path: str, device: torch.device):
                 f"{path} has no '{key}'; it does not look like a stochastic-CVRPTW "
                 f"checkpoint written by scripts/train_stoch.py"
             )
-    policy = build_cvrptw_stoch_policy(blob["model_config"]).to(device)
+    gated = GATE_PARAM_NAME in blob["model_state"]
+    builder = build_cvrptw_gated_policy if gated else build_cvrptw_stoch_policy
+    policy = builder(blob["model_config"]).to(device)
     policy.load_state_dict(blob["model_state"], strict=True)
     policy.eval()      # REQUIRED: BatchNorm in train mode would damp the OOD shift
-    return policy, SimulatorConfig(**blob["sim_config"]), blob
+    return policy, SimulatorConfig(**blob["sim_config"]), blob, ("D" if gated else "B")
 
 
 def main() -> None:
     args = parse_args()
     device = torch.device(args.device)
-    policy, sim_cfg, blob = _load(args.checkpoint, device)
+    policy, sim_cfg, blob, variant = _load(args.checkpoint, device)
     weight = float(blob["tardiness_weight"])
 
     data = generate_cvrptw(
@@ -94,7 +103,7 @@ def main() -> None:
     scenario_seeds = tuple(range(args.scenarios))
     augment = not args.no_augment
 
-    print(f"checkpoint {args.checkpoint}")
+    print(f"checkpoint {args.checkpoint}  (variant {variant})")
     print(f"  trained at beta_var={sim_cfg.beta_var} alpha={sim_cfg.alpha} "
           f"eta={sim_cfg.eta} K={sim_cfg.n_bins} | tardiness_weight={weight}")
     print(f"  stored val_cost {blob.get('val_cost', float('nan')):.4f}")

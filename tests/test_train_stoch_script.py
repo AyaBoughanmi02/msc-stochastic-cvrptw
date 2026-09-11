@@ -142,6 +142,32 @@ def test_check_trained_reports_the_full_verification(tmp_path) -> None:
     assert "penalty share at the trained weight" in result.stdout
 
 
+def test_check_trained_reads_a_variant_d_checkpoint(tmp_path) -> None:
+    """The variant must be inferred from the SAVED WEIGHTS, not assumed.
+
+    A variant-D checkpoint carries the gate scalar; rebuilding it as variant B fails
+    load_state_dict(strict=True) with an 'Unexpected key gate_w'.
+    """
+    ckpt = tmp_path / "tiny_d.pt"
+    _run_script(
+        "scripts/train_stoch.py", "--variant", "d",
+        "--n-customers", "8", "--steps", "2", "--batch-size", "4",
+        "--val-size", "4", "--val-scenarios", "1", "--n-starts", "3",
+        "--eval-every", "2", "--log-every", "2", "--gate-check-every", "0",
+        "--eval-batch-size", "4", "--beta-var", "0.3", "--tardiness-weight", "2",
+        "--device", "cpu", "--out", str(ckpt),
+    )
+    result = _run_script(
+        "scripts/check_trained.py",
+        "--checkpoint", str(ckpt), "--test-size", "8", "--scenarios", "1",
+        "--n-starts", "3", "--eval-batch-size", "4", "--ood-beta-var", "0.6",
+        "--no-augment", "--skip-saturation", "--device", "cpu",
+    )
+    assert "(variant D)" in result.stdout
+    assert "gate chain: PASS" in result.stdout
+    assert "softplus_w" in result.stdout          # the gate scalar is reported
+
+
 def test_check_trained_rejects_a_variant_a_checkpoint(tmp_path) -> None:
     """A deterministic checkpoint has no simulator, so it cannot be verified this way."""
     import torch
