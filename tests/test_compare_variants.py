@@ -171,3 +171,29 @@ def test_a_fixed_config_still_works_unchanged() -> None:
         n_starts=3, tardiness_weight=2.0, reward_mode="analytic",
     )
     assert "mean_cost" in stats
+
+
+# ------------------------------------------------------------- multi-seed aggregation
+
+
+def test_seed_interval_widens_with_fewer_seeds() -> None:
+    """A t-interval on 2-3 numbers must be honestly wide, not falsely tight."""
+    from scripts.seed_study import _interval
+
+    values = [-0.40, -0.55, -0.48]
+    mean3, half3, sd3 = _interval(values)
+    assert mean3 == pytest.approx(-0.4767, abs=1e-3)
+    mean2, half2, _ = _interval(values[:2])
+    assert half2 > half3                       # fewer seeds => wider, never tighter
+    _, half1, _ = _interval(values[:1])
+    assert half1 == float("inf")               # one seed says nothing about seed spread
+
+
+def test_seed_interval_uses_the_t_distribution_not_normal() -> None:
+    """With 3 samples the normal approximation would understate the interval by ~60%."""
+    from scripts.seed_study import _interval
+
+    values = [1.0, 2.0, 3.0]
+    _, half, sd = _interval(values)
+    normal_half = 1.959964 * sd / math.sqrt(3)
+    assert half > 1.5 * normal_half
