@@ -121,3 +121,53 @@ def test_forced_gate_actually_changes_the_penalties() -> None:
 
 def test_gateless_policy_has_no_gate_to_sweep() -> None:
     assert not hasattr(build_cvrptw_stoch_policy(), "gate_w")
+
+
+# ------------------------------------------------- domain randomisation over beta_var
+
+
+def test_train_step_accepts_a_resampled_simulator_config() -> None:
+    """Domain randomisation: sim_cfg may be a callable, resampled per mini-batch."""
+    from src.data.cvrptw_generator import generate_cvrptw
+    from src.data.simulator import SimulatorConfig
+    from src.train.pomo_stoch import build_optimizer, train_step_stoch
+
+    torch.manual_seed(0)
+    policy = build_cvrptw_gated_policy()
+    opt = build_optimizer(policy, lr=3e-4, weight_decay=1e-6, gate_lr=1e-2)
+    seen: list[float] = []
+
+    def sampler() -> SimulatorConfig:
+        beta = 0.15 + 0.45 * float(torch.rand(1))
+        seen.append(beta)
+        return SimulatorConfig(alpha=0.3, beta_var=beta, eta=0.6, shift_end=4.0)
+
+    def batch():
+        return generate_cvrptw(2, 10, capacity=20, seed=None, shift_end=4.0,
+                               service_time=0.2)
+
+    stats = train_step_stoch(
+        policy, opt, batch, sampler, accum_steps=3, n_starts=3,
+        tardiness_weight=2.0, reward_mode="analytic",
+    )
+    assert len(seen) == 3                      # resampled once per mini-batch
+    assert len(set(seen)) == 3                 # genuinely different levels
+    assert all(0.15 <= b <= 0.60 for b in seen)
+    assert stats["mean_cost"] == stats["mean_cost"]     # not NaN
+
+
+def test_a_fixed_config_still_works_unchanged() -> None:
+    from src.data.cvrptw_generator import generate_cvrptw
+    from src.data.simulator import SimulatorConfig
+    from src.train.pomo_stoch import build_optimizer, train_step_stoch
+
+    torch.manual_seed(0)
+    policy = build_cvrptw_stoch_policy()
+    opt = build_optimizer(policy, lr=3e-4, weight_decay=1e-6, gate_lr=1e-2)
+    stats = train_step_stoch(
+        policy, opt,
+        lambda: generate_cvrptw(2, 10, capacity=20, shift_end=4.0, service_time=0.2),
+        SimulatorConfig(alpha=0.3, beta_var=0.3, eta=0.6, shift_end=4.0),
+        n_starts=3, tardiness_weight=2.0, reward_mode="analytic",
+    )
+    assert "mean_cost" in stats

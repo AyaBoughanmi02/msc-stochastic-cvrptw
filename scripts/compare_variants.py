@@ -60,6 +60,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-augment", action="store_true", help="skip 8x augmentation (faster)")
     p.add_argument("--gate-sweep", type=float, nargs="*", default=None,
                    help="override softplus(w) at inference, e.g. --gate-sweep 0 0.5 2 4 8")
+    p.add_argument("--select-gate-on-val", action="store_true",
+                   help="choose the sweep value that is best on a HELD-OUT validation set "
+                        "at the in-distribution variance only, then report it on the test "
+                        "set. Turns the sweep from cherry-picking into a legitimate "
+                        "hyperparameter choice")
+    p.add_argument("--gate-val-seed", type=int, default=777,
+                   help="instances for gate selection; must differ from --test-seed AND "
+                        "from the training validation seed")
+    p.add_argument("--gate-val-size", type=int, default=128)
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -139,13 +148,56 @@ def main() -> None:
     print(f"  tardiness_weight {weight} held FIXED | {args.test_size} instances "
           f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}\n")
 
-    def evaluate(loaded, beta_var: float) -> dict[str, Tensor]:
+    def evaluate(loaded, beta_var: float, instances=None,
+                 strength: float | None = None) -> dict[str, Tensor]:
         cfg = replace(loaded.sim_cfg, beta_var=beta_var)
-        return evaluate_stoch(
-            loaded.policy, data, cfg, tardiness_weight=weight, n_starts=args.n_starts,
-            augment=augment, eval_batch_size=args.eval_batch_size,
-            scenario_seeds=scenario_seeds,
+        target = data if instances is None else instances
+
+        def run() -> dict[str, Tensor]:
+            return evaluate_stoch(
+                loaded.policy, target, cfg, tardiness_weight=weight,
+                n_starts=args.n_starts, augment=augment,
+                eval_batch_size=args.eval_batch_size, scenario_seeds=scenario_seeds,
+            )
+
+        if strength is None or not hasattr(loaded.policy, "gate_w"):
+            return run()
+        with forced_gate(loaded.policy, strength):
+            return run()
+
+    # ------------------------------------------- gate selection on held-out instances
+    selected: float | None = None
+    if args.select_gate_on_val:
+        if args.gate_sweep is None:
+            raise ValueError("--select-gate-on-val requires --gate-sweep")
+        if not hasattr(cand.policy, "gate_w"):
+            raise ValueError("--select-gate-on-val needs a variant-D candidate")
+        if args.gate_val_seed == args.test_seed:
+            raise ValueError(
+                "--gate-val-seed must differ from --test-seed, or the gate would be "
+                "chosen on the very instances it is then reported on"
+            )
+        val = generate_cvrptw(
+            args.gate_val_size, base.blob["n_customers"], base.blob["capacity"],
+            service_time=base.blob["service_time"], shift_end=base.blob["shift_end"],
+            tw_half_width=base.blob["tw_half_width"], seed=args.gate_val_seed,
+            device=device,
         )
+        id_beta = args.beta_var[0]
+        print(f"GATE SELECTION on {args.gate_val_size} held-out instances "
+              f"(seed {args.gate_val_seed}), at the IN-DISTRIBUTION variance "
+              f"beta_var={id_beta} ONLY -- no test or shifted data is consulted")
+        print(f"{'softplus(w)':>12} {'val cost':>10}")
+        print("-" * 23)
+        scores = {}
+        for strength in args.gate_sweep:
+            c = float(evaluate(cand, id_beta, instances=val,
+                               strength=strength)["cost"].mean())
+            scores[strength] = c
+            print(f"{strength:>12.4f} {c:>10.4f}")
+        selected = min(scores, key=scores.get)
+        print(f"  selected softplus(w) = {selected:g} "
+              f"(val cost {scores[selected]:.4f})\n")
 
     base_cost: dict[float, Tensor] = {}
     cand_cost: dict[float, Tensor] = {}
@@ -153,11 +205,13 @@ def main() -> None:
     # ------------------------------------------------------------- cost, level by level
     header = (f"{'beta_var':>9} {'baseline':>10} {'candidate':>10} {'diff':>9} "
               f"{'95% CI':>20}")
-    print("PAIRED COST  (per instance; negative diff = candidate cheaper)")
+    note = f" | candidate gate forced to {selected:g}" if selected is not None else ""
+    print(f"PAIRED COST  (per instance; negative diff = candidate cheaper){note}")
     print(header)
     print("-" * (len(header) + 22))
     for beta_var in args.beta_var:
-        b, c = evaluate(base, beta_var), evaluate(cand, beta_var)
+        b = evaluate(base, beta_var)
+        c = evaluate(cand, beta_var, strength=selected)
         base_cost[beta_var], cand_cost[beta_var] = b["cost"], c["cost"]
         p = paired_difference(c["cost"], b["cost"])
         print(f"{beta_var:>9.3f} {float(b['cost'].mean()):>10.4f} "
@@ -191,8 +245,8 @@ def main() -> None:
         print(f"{'softplus(w)':>12}{cols}{'vs baseline@ID':>16}")
         print("-" * (12 + 11 * len(args.beta_var) + 16))
         for strength in args.gate_sweep:
-            with forced_gate(cand.policy, strength):
-                costs = [evaluate(cand, bv)["cost"] for bv in args.beta_var]
+            costs = [evaluate(cand, bv, strength=strength)["cost"]
+                     for bv in args.beta_var]
             p = paired_difference(costs[0], base_cost[id_beta])
             tag = "  <- learned" if abs(strength - learned) < 1e-3 else ""
             row = "".join(f"{float(c.mean()):>11.4f}" for c in costs)

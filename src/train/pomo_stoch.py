@@ -223,7 +223,7 @@ def train_step_stoch(
     policy,
     optimizer: torch.optim.Optimizer,
     sample_batch: Callable[[], CVRPTWData],
-    sim_cfg: SimulatorConfig,
+    sim_cfg: SimulatorConfig | Callable[[], SimulatorConfig],
     accum_steps: int = 1,
     n_starts: int | None = None,
     tardiness_weight: float = 1.0,
@@ -237,6 +237,11 @@ def train_step_stoch(
     Reports the penalised cost AND its parts, because they are not comparable across
     `tardiness_weight` settings: only `mean_distance` is comparable to variant A's
     val_cost, and `mean_tardiness` / `late_rate` are what the weight sweep calibrates.
+
+    `sim_cfg` may be a CALLABLE returning a SimulatorConfig, resampled per mini-batch.
+    That is how domain randomisation over beta_var is done: the policy meets a range of
+    risk levels during training instead of exactly one, so a learned gate strength is not
+    calibrated to a single variance it will then be tested away from.
     """
     if accum_steps < 1:
         raise ValueError(f"accum_steps must be >= 1, got {accum_steps}")
@@ -249,8 +254,9 @@ def train_step_stoch(
               "mean_tardiness": 0.0, "mean_violations": 0.0, "late_rate": 0.0}
     for _ in range(accum_steps):
         data = sample_batch()
+        cfg = sim_cfg() if callable(sim_cfg) else sim_cfg     # resampled per mini-batch
         out = pomo_rollout_stoch(
-            policy, data, sim_cfg, n_starts, tardiness_weight,
+            policy, data, cfg, n_starts, tardiness_weight,
             generator=generator, common_random_numbers=common_random_numbers,
             reward_mode=reward_mode,
         )

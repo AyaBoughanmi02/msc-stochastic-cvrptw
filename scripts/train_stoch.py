@@ -54,7 +54,13 @@ def parse_args() -> argparse.Namespace:
     # simulator (the Edge Bank)
     p.add_argument("--n-bins", type=int, default=24, help="K time bins per shift")
     p.add_argument("--alpha", type=float, default=0.3, help="rush-hour ripple amplitude")
-    p.add_argument("--beta-var", type=float, default=0.3, help="variance scale (OOD knob)")
+    p.add_argument("--beta-var", type=float, default=0.3,
+                   help="variance scale (OOD knob); also the level validation reports at")
+    p.add_argument("--beta-var-range", type=float, nargs=2, default=None,
+                   metavar=("LO", "HI"),
+                   help="domain randomisation: resample beta_var uniformly in [LO, HI] "
+                        "for every training mini-batch. Validation still reports at "
+                        "--beta-var, so the numbers stay comparable across runs")
     p.add_argument("--eta", type=float, default=0.6, help="reliability-field strength")
     p.add_argument("--field-scale", type=float, default=0.3)
     p.add_argument("--phase-k", type=float, default=1.0, help="spatial congestion lag")
@@ -146,6 +152,19 @@ def main() -> None:
 
     train_gen = torch.Generator(device=device).manual_seed(args.seed)
 
+    # Training-time simulator config: one fixed level, or resampled per mini-batch.
+    if args.beta_var_range is None:
+        train_sim_cfg = sim_cfg
+    else:
+        lo, hi = args.beta_var_range
+        if not 0.0 <= lo < hi:
+            raise ValueError(f"--beta-var-range needs 0 <= LO < HI, got {lo} {hi}")
+        cfg_gen = torch.Generator().manual_seed(args.seed + 1)
+
+        def train_sim_cfg() -> SimulatorConfig:
+            beta = lo + (hi - lo) * float(torch.rand(1, generator=cfg_gen))
+            return replace(sim_cfg, beta_var=beta)
+
     def sample_batch():
         return generate_cvrptw(
             args.batch_size, args.n_customers, args.capacity,
@@ -186,6 +205,9 @@ def main() -> None:
     t0 = time.time()
     gate_note = (f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
                  if args.variant == "d" else "")
+    if args.beta_var_range is not None:
+        gate_note += (f" | beta_var randomised over "
+                      f"[{args.beta_var_range[0]}, {args.beta_var_range[1]}]")
     print(f"variant {args.variant.upper()}{gate_note}")
     print(f"stochastic CVRPTW | cap {args.capacity} shift {args.shift_end} "
           f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
@@ -195,7 +217,7 @@ def main() -> None:
 
     for step in range(1, args.steps + 1):
         metrics = train_step_stoch(
-            policy, optimizer, sample_batch, sim_cfg,
+            policy, optimizer, sample_batch, train_sim_cfg,
             accum_steps=args.accum_steps, n_starts=args.n_starts,
             tardiness_weight=args.tardiness_weight, grad_clip=args.grad_clip,
             generator=train_gen, common_random_numbers=not args.no_crn,
@@ -245,6 +267,7 @@ def main() -> None:
                      "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
                      "service_time": args.service_time,
                      "reward_mode": args.reward_mode, "variant": args.variant,
+                     "beta_var_range": args.beta_var_range,
                      "gate_lr": args.gate_lr,
                      "policy_metrics": (policy.policy_metrics()
                                         if hasattr(policy, "policy_metrics") else {}),
