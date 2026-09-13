@@ -94,8 +94,14 @@ class SimulatorConfig:
     beta_var:    variance scale; sigma^2 = beta_var * r * mu^2. THE OOD MAGNITUDE KNOB.
     phase_k:     spatial congestion-lag coefficient (phase = phase_k * radius).
     shift_end:   per-route shift horizon; must match the generator/env value.
-    eta:         reliability-field strength, 0 <= eta < 1. 0.0 == the locked homogeneous
-                 model (r == 1) bit-exactly. THE OOD STRUCTURE KNOB.
+    eta:         reliability-field strength, -1 < eta < 1. 0.0 == the locked homogeneous
+                 model (r == 1) bit-exactly. THE OOD STRUCTURE KNOB. POSITIVE makes
+                 central corridors the unreliable ones; NEGATIVE INVERTS the field so the
+                 peripheral corridors are unreliable instead. The inversion is what makes
+                 a *structural* shift possible: |eta| unchanged means the amount of
+                 heterogeneity is the same, but WHICH edges are risky is reversed, so a
+                 policy that memorised "central edges are risky" mis-generalises while one
+                 that penalises the actual sigma^2 stays correctly ordered by construction.
     field_scale: gaussian width of the reliability field, in coordinate units.
     """
 
@@ -119,8 +125,11 @@ class SimulatorConfig:
             raise ValueError(f"beta_var must be >= 0, got {self.beta_var}")
         if self.shift_end <= 0.0:
             raise ValueError(f"shift_end must be > 0, got {self.shift_end}")
-        if not 0.0 <= self.eta < 1.0:
-            raise ValueError(f"eta must be in [0, 1) to keep r > 0, got {self.eta}")
+        if not -1.0 < self.eta < 1.0:
+            raise ValueError(
+                f"eta must be in (-1, 1) to keep the reliability field r > 0, got "
+                f"{self.eta} (negative inverts which corridors are unreliable)"
+            )
         if self.field_scale <= 0.0:
             raise ValueError(f"field_scale must be > 0, got {self.field_scale}")
 

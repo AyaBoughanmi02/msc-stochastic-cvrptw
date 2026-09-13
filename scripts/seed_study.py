@@ -55,8 +55,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--baseline", type=str, nargs="+", required=True,
                    help="one checkpoint per training seed")
     p.add_argument("--candidate", type=str, nargs="+", required=True)
+    p.add_argument("--shift-param", type=str, default="beta_var",
+                   choices=["beta_var", "eta", "field_scale", "alpha"],
+                   help="which simulator parameter to shift. 'beta_var' is a MAGNITUDE "
+                        "shift (everything gets uniformly riskier, the risk RANKING is "
+                        "unchanged). 'eta' is a STRUCTURAL shift: flipping its sign "
+                        "inverts WHICH corridors are unreliable while keeping the amount "
+                        "of heterogeneity identical")
+    p.add_argument("--shift-values", type=float, nargs="+", default=None,
+                   help="values of --shift-param to evaluate; the FIRST must be the "
+                        "trained value, since it is treated as in-distribution")
     p.add_argument("--beta-var", type=float, nargs="+", default=[0.3, 0.6, 0.9],
-                   help="the FIRST is treated as in-distribution")
+                   help="shorthand for --shift-param beta_var --shift-values ...")
     p.add_argument("--test-size", type=int, default=256)
     p.add_argument("--test-seed", type=int, default=4242)
     p.add_argument("--scenarios", type=int, default=4)
@@ -85,6 +95,9 @@ def main() -> None:
     augment = not args.no_augment
     scenario_seeds = tuple(range(args.scenarios))
 
+    param = args.shift_param
+    values = args.shift_values if args.shift_values is not None else args.beta_var
+
     baselines = [load_stoch_policy(p, device) for p in args.baseline]
     candidates = [load_stoch_policy(p, device) for p in args.candidate]
     ref = baselines[0]
@@ -100,6 +113,16 @@ def main() -> None:
             if loaded.blob[key] != ref.blob[key]:
                 raise ValueError(f"checkpoints disagree on '{key}' -- not one problem")
 
+    # The first value is reported as in-distribution, so it must be what was trained on;
+    # otherwise every "degradation" below would be measured from the wrong baseline.
+    trained = getattr(ref.sim_cfg, param)
+    if abs(values[0] - trained) > 1e-9:
+        raise ValueError(
+            f"the first --shift-values entry ({values[0]}) is not the trained "
+            f"{param}={trained}. The first value is treated as in-distribution, so "
+            f"degradation would be measured from the wrong reference"
+        )
+
     data = generate_cvrptw(
         args.test_size, ref.blob["n_customers"], ref.blob["capacity"],
         service_time=ref.blob["service_time"], shift_end=ref.blob["shift_end"],
@@ -108,16 +131,18 @@ def main() -> None:
 
     print(f"baseline  ({baselines[0].variant}): {len(baselines)} seeds")
     print(f"candidate ({candidates[0].variant}): {len(candidates)} seeds")
+    kind = "structural" if param in ("eta", "field_scale") else "magnitude"
+    print(f"  shifting {param} over {values}  ({kind} shift; trained at {trained})")
     print(f"  tardiness_weight {weight} FIXED | {args.test_size} instances "
           f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}\n")
 
     # costs[group][beta][seed] -> (n_instances,)
     costs: dict[str, dict[float, list[Tensor]]] = {"base": {}, "cand": {}}
     for group, loaded_list in (("base", baselines), ("cand", candidates)):
-        for beta_var in args.beta_var:
+        for beta_var in values:
             per_seed = []
             for loaded in loaded_list:
-                cfg = replace(loaded.sim_cfg, beta_var=beta_var)
+                cfg = replace(loaded.sim_cfg, **{param: beta_var})
                 per_seed.append(evaluate_stoch(
                     loaded.policy, data, cfg, tardiness_weight=weight,
                     n_starts=args.n_starts, augment=augment,
@@ -128,9 +153,9 @@ def main() -> None:
     # ------------------------------------------------------------- 1. per-seed means
     print("PER-SEED MEAN COST  (raw material -- does every seed point the same way?)")
     width = 10 * max(len(baselines), len(candidates))
-    print(f"{'beta_var':>9} {'variant':>9} {'per seed':>{width}} {'mean':>9} {'sd':>8}")
+    print(f"{param:>9} {'variant':>9} {'per seed':>{width}} {'mean':>9} {'sd':>8}")
     print("-" * (9 + 10 + width + 19))
-    for beta_var in args.beta_var:
+    for beta_var in values:
         for group, label in (("base", baselines[0].variant),
                              ("cand", candidates[0].variant)):
             means = [float(c.mean()) for c in costs[group][beta_var]]
@@ -141,11 +166,11 @@ def main() -> None:
     # ------------------------------------------------- 2. seed-averaged paired (headline)
     print("\nSEED-AVERAGED PAIRED COST  (each variant averaged over its seeds, then")
     print("compared instance by instance; negative = candidate cheaper)")
-    header = f"{'beta_var':>9} {'baseline':>10} {'candidate':>10} {'diff':>9} {'95% CI':>21}"
+    header = f"{param:>9} {'baseline':>10} {'candidate':>10} {'diff':>9} {'95% CI':>21}"
     print(header)
     print("-" * (len(header) + 20))
     avg: dict[str, dict[float, Tensor]] = {"base": {}, "cand": {}}
-    for beta_var in args.beta_var:
+    for beta_var in values:
         for group in ("base", "cand"):
             avg[group][beta_var] = torch.stack(costs[group][beta_var]).mean(dim=0)
         diff = (avg["cand"][beta_var] - avg["base"][beta_var]).double()
@@ -158,13 +183,13 @@ def main() -> None:
               f"{float(avg['cand'][beta_var].mean()):>10.4f} {mean:>+9.4f} "
               f"[{lo:>+8.4f}, {hi:>+8.4f}]{flag}")
 
-    id_beta = args.beta_var[0]
-    if len(args.beta_var) > 1:
-        print(f"\nSEED-AVERAGED PAIRED DEGRADATION from beta_var={id_beta} "
+    id_beta = values[0]
+    if len(values) > 1:
+        print(f"\nSEED-AVERAGED PAIRED DEGRADATION from {param}={id_beta} "
               f"(THE THESIS CLAIM)")
         print(header)
         print("-" * (len(header) + 20))
-        for beta_var in args.beta_var[1:]:
+        for beta_var in values[1:]:
             b_deg = avg["base"][beta_var] - avg["base"][id_beta]
             c_deg = avg["cand"][beta_var] - avg["cand"][id_beta]
             diff = (c_deg - b_deg).double()
@@ -181,10 +206,10 @@ def main() -> None:
     n_pairs = min(len(baselines), len(candidates))
     print(f"\nACROSS-SEED SPREAD  (difference of means computed separately per seed pair;")
     print(f"with {n_pairs} seeds the interval is wide by construction -- read the SIGN)")
-    print(f"{'beta_var':>9} {'per-seed diff':>{width}} {'mean':>9} {'sd':>8} "
+    print(f"{param:>9} {'per-seed diff':>{width}} {'mean':>9} {'sd':>8} "
           f"{'95% CI (t)':>22} {'all agree':>10}")
     print("-" * (9 + width + 52))
-    for beta_var in args.beta_var:
+    for beta_var in values:
         diffs = [float(costs["cand"][beta_var][i].mean()
                        - costs["base"][beta_var][i].mean()) for i in range(n_pairs)]
         mean, half, sd = _interval(diffs)

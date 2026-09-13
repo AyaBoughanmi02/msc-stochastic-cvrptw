@@ -26,7 +26,14 @@ import pytest
 import torch
 
 from src.data.cvrptw_generator import CVRPTWData, generate_cvrptw
-from src.data.simulator import SimulatorConfig, build_edge_bank, draw_noise
+from src.data.simulator import (
+    MU,
+    SIGMA2,
+    SimulatorConfig,
+    build_edge_bank,
+    draw_noise,
+    horizon_average,
+)
 from src.envs.cvrptw_stoch_env import CVRPTWStochEnv
 from src.models.factory import build_cvrptw_stoch_policy
 from src.train.pomo import build_starts
@@ -255,3 +262,44 @@ def test_analytic_advantage_is_not_dominated_by_noise() -> None:
     bc = b - b.mean(dim=1, keepdim=True)
     corr = float((ac * bc).sum() / (ac.pow(2).sum().sqrt() * bc.pow(2).sum().sqrt()))
     assert corr > 0.99, f"per-start penalty reproducibility {corr:.3f}"
+
+
+# ------------------------------------------------ negative eta: the structural shift
+
+
+def test_negative_eta_inverts_which_edges_are_risky() -> None:
+    """A structural shift needs the risk RANKING to change, not just its magnitude.
+
+    Flipping the sign of eta keeps |heterogeneity| identical but reverses which corridors
+    are unreliable, so a policy that memorised "central edges are risky" mis-generalises
+    while one that penalises the actual sigma^2 stays correctly ordered by construction.
+    """
+    coords = torch.rand(1, 12, 2, generator=torch.Generator().manual_seed(0))
+
+    def risk_per_edge(eta: float) -> torch.Tensor:
+
+        avg = horizon_average(build_edge_bank(coords, _cfg(eta=eta)))
+        ratio = (avg[..., SIGMA2] / avg[..., MU].clamp_min(1e-9) ** 2).flatten()
+        return ratio[ratio > 0]                      # drop the zero-length self-loops
+
+    plus, minus = risk_per_edge(0.6), risk_per_edge(-0.6)
+    corr = float(torch.corrcoef(torch.stack([plus, minus]))[0, 1])
+    assert corr < -0.99, f"eta sign flip should invert the ranking, got corr {corr:+.3f}"
+    # The AMOUNT of heterogeneity is unchanged -- only its direction.
+    assert float(plus.std()) == pytest.approx(float(minus.std()), rel=1e-3)
+
+
+def test_eta_zero_is_still_homogeneous() -> None:
+    coords = torch.rand(1, 10, 2, generator=torch.Generator().manual_seed(1))
+
+    avg = horizon_average(build_edge_bank(coords, _cfg(eta=0.0)))
+    ratio = (avg[..., SIGMA2] / avg[..., MU].clamp_min(1e-9) ** 2).flatten()
+    ratio = ratio[ratio > 0]
+    assert float(ratio.std() / ratio.mean()) < 1e-4
+
+
+@pytest.mark.parametrize("eta", [1.0, -1.0, 1.5, -2.0])
+def test_eta_outside_the_open_unit_interval_raises(eta: float) -> None:
+    """|eta| >= 1 would let the reliability multiplier reach zero or go negative."""
+    with pytest.raises(ValueError, match="eta"):
+        SimulatorConfig(alpha=0.3, beta_var=0.3, eta=eta, shift_end=4.0)
