@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import math
 import statistics
+import time
 from dataclasses import replace
 
 import torch
@@ -136,19 +137,36 @@ def main() -> None:
     print(f"  tardiness_weight {weight} FIXED | {args.test_size} instances "
           f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}\n")
 
-    # costs[group][beta][seed] -> (n_instances,)
+    # costs[group][value][seed] -> (n_instances,)
+    # Every table below needs the full grid, so nothing can be printed until the last
+    # evaluation finishes. Progress is reported as it goes -- a long silent run is
+    # indistinguishable from a hung one, and this grid can be tens of evaluations.
+    total = len(values) * (len(baselines) + len(candidates))
+    done = 0
+    t0 = time.time()
+    print(f"evaluating {total} checkpoint x {param} combinations...", flush=True)
+
     costs: dict[str, dict[float, list[Tensor]]] = {"base": {}, "cand": {}}
     for group, loaded_list in (("base", baselines), ("cand", candidates)):
-        for beta_var in values:
+        label = loaded_list[0].variant
+        for value in values:
             per_seed = []
-            for loaded in loaded_list:
-                cfg = replace(loaded.sim_cfg, **{param: beta_var})
+            for seed_idx, loaded in enumerate(loaded_list):
+                cfg = replace(loaded.sim_cfg, **{param: value})
                 per_seed.append(evaluate_stoch(
                     loaded.policy, data, cfg, tardiness_weight=weight,
                     n_starts=args.n_starts, augment=augment,
                     eval_batch_size=args.eval_batch_size, scenario_seeds=scenario_seeds,
                 )["cost"])
-            costs[group][beta_var] = per_seed
+                done += 1
+                elapsed = time.time() - t0
+                eta_s = elapsed / done * (total - done)
+                print(f"  [{done:>3}/{total}] {label} seed {seed_idx + 1} "
+                      f"{param}={value:<7g} cost {float(per_seed[-1].mean()):.4f} "
+                      f"| {elapsed / 60:.1f} min elapsed, ~{eta_s / 60:.1f} min left",
+                      flush=True)
+            costs[group][value] = per_seed
+    print()
 
     # ------------------------------------------------------------- 1. per-seed means
     print("PER-SEED MEAN COST  (raw material -- does every seed point the same way?)")
