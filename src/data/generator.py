@@ -45,9 +45,17 @@ def generate_cvrp(
             )
         capacity = _DEFAULT_CAPACITY[n_customers]
 
+    # A fresh torch.Generator is NOT randomly initialised: it always starts from the
+    # fixed default seed 67280421310721. Leaving it unseeded therefore returned the
+    # IDENTICAL batch on every call, so "fresh" training batches were the same 32
+    # instances for the whole run. When no seed is given we now draw one from the
+    # GLOBAL RNG: batches differ call to call, and torch.manual_seed(args.seed) in the
+    # training script still makes the whole run reproducible. Seeded calls (val, test,
+    # reference sets) are bit-identical to before.
+    if seed is None:
+        seed = int(torch.randint(0, 2**62, (1,)).item())
     gen = torch.Generator(device="cpu")
-    if seed is not None:
-        gen.manual_seed(seed)
+    gen.manual_seed(seed)
 
     n = n_customers + 1
     coords = torch.rand(batch_size, n, 2, generator=gen)          # (B, N, 2)
