@@ -104,9 +104,14 @@ def generate_cvrptw(
 
     # Sample a window centre in [lo, hi] with an independent, seeded stream so
     # the same `seed` reproduces the same instance (windows included).
+    # Unseeded torch.Generator objects all start from the same fixed default seed, so
+    # an unseeded gen_tw returned the SAME window draws on every call (training batches
+    # shared one window pattern). Unseeded calls now draw a seed from the global RNG;
+    # seeded calls (val/test) are bit-identical to before.
     gen_tw = torch.Generator(device="cpu")
-    if seed is not None:
-        gen_tw.manual_seed(seed + 1)
+    gen_tw.manual_seed(
+        seed + 1 if seed is not None else int(torch.randint(0, 2**62, (1,)).item())
+    )
     u = torch.rand(b, n, generator=gen_tw)               # (B, N)
     centre = lo + u * (hi - lo).clamp_min(0.0)           # (B, N)
 
