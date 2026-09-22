@@ -202,6 +202,7 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     best_val = float("inf")
+    last_path = out_path.with_name(out_path.stem + "_last" + out_path.suffix)
     t0 = time.time()
     gate_note = (f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
                  if args.variant == "d" else "")
@@ -257,30 +258,32 @@ def main() -> None:
                          f"(tard {ood_stats['tardiness']:.4f})")
 
             tag = ""
+            ckpt = {"model_state": policy.state_dict(), "model_config": model_config,
+                    "sim_config": asdict(sim_cfg),
+                    "tardiness_weight": args.tardiness_weight,
+                    "n_customers": args.n_customers, "capacity": args.capacity,
+                    "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
+                    "service_time": args.service_time,
+                    "reward_mode": args.reward_mode, "variant": args.variant,
+                    "beta_var_range": args.beta_var_range,
+                    "gate_lr": args.gate_lr,
+                    "policy_metrics": (policy.policy_metrics()
+                                       if hasattr(policy, "policy_metrics") else {}),
+                    "val_scenario_seeds": scenario_seeds,
+                    "val_augment": args.val_augment,
+                    "val_stats": id_stats, "ood_stats": ood_stats,
+                    "val_cost": id_stats["cost"], "step": step}
+            # Always keep the LATEST weights too: with a noisy 256-instance validation,
+            # "best val" can select an early checkpoint by luck. A fixed-budget final
+            # checkpoint is the selection-free alternative for the seed study.
+            torch.save(ckpt, last_path)
             if id_stats["cost"] < best_val:
                 best_val = id_stats["cost"]
-                torch.save(
-                    {"model_state": policy.state_dict(), "model_config": model_config,
-                     "sim_config": asdict(sim_cfg),
-                     "tardiness_weight": args.tardiness_weight,
-                     "n_customers": args.n_customers, "capacity": args.capacity,
-                     "shift_end": args.shift_end, "tw_half_width": args.tw_half_width,
-                     "service_time": args.service_time,
-                     "reward_mode": args.reward_mode, "variant": args.variant,
-                     "beta_var_range": args.beta_var_range,
-                     "gate_lr": args.gate_lr,
-                     "policy_metrics": (policy.policy_metrics()
-                                        if hasattr(policy, "policy_metrics") else {}),
-                     "val_scenario_seeds": scenario_seeds,
-                     "val_augment": args.val_augment,
-                     "val_stats": id_stats, "ood_stats": ood_stats,
-                     "val_cost": id_stats["cost"]},
-                    out_path,
-                )
+                torch.save(ckpt, out_path)
                 tag = "  <- saved best"
             print(line + f" | best {best_val:.4f}{tag}")
 
-    print(f"done. best val_cost {best_val:.4f}. checkpoint: {out_path}")
+    print(f"done. best val_cost {best_val:.4f}. checkpoint: {out_path} (latest: {last_path})")
 
 
 if __name__ == "__main__":
