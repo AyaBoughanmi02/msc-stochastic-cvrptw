@@ -17,8 +17,12 @@ from typing import NamedTuple
 import torch
 
 from src.data.simulator import SimulatorConfig
-from src.models.factory import build_cvrptw_gated_policy, build_cvrptw_stoch_policy
-from src.train.pomo_stoch import GATE_PARAM_NAME
+from src.models.factory import (
+    build_cvrptw_gated_policy,
+    build_cvrptw_sed2am_policy,
+    build_cvrptw_stoch_policy,
+)
+from src.train.pomo_stoch import GATE_PARAM_NAME, SED_GATE_TAG
 
 _REQUIRED = ("model_state", "model_config", "sim_config", "tardiness_weight")
 
@@ -29,7 +33,7 @@ class LoadedPolicy(NamedTuple):
     policy: torch.nn.Module
     sim_cfg: SimulatorConfig      # the simulator it was trained under
     blob: dict                    # the raw checkpoint (instance dials, val stats, ...)
-    variant: str                  # 'B' or 'D', inferred from the weights
+    variant: str                  # 'B', 'C' or 'D', inferred from the weights
 
 
 def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPolicy:
@@ -46,10 +50,16 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
                 f"{path} has no '{key}'; it does not look like a stochastic-CVRPTW "
                 f"checkpoint written by scripts/train_stoch.py"
             )
-    gated = GATE_PARAM_NAME in blob["model_state"]
-    builder = build_cvrptw_gated_policy if gated else build_cvrptw_stoch_policy
+    state = blob["model_state"]
+    # Variant is inferred from the WEIGHTS: D carries the single scalar `gate_w`, C carries
+    # the SED2AM-style gate parameters, B carries neither.
+    if GATE_PARAM_NAME in state:
+        variant, builder = "D", build_cvrptw_gated_policy
+    elif any(SED_GATE_TAG in k for k in state):
+        variant, builder = "C", build_cvrptw_sed2am_policy
+    else:
+        variant, builder = "B", build_cvrptw_stoch_policy
     policy = builder(blob["model_config"]).to(device)
-    policy.load_state_dict(blob["model_state"], strict=True)
+    policy.load_state_dict(state, strict=True)
     policy.eval()
-    return LoadedPolicy(policy, SimulatorConfig(**blob["sim_config"]), blob,
-                        "D" if gated else "B")
+    return LoadedPolicy(policy, SimulatorConfig(**blob["sim_config"]), blob, variant)

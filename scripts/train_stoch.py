@@ -33,10 +33,13 @@ import torch
 from src.data.cvrptw_generator import generate_cvrptw
 from src.data.simulator import SimulatorConfig, assert_ripple_reachable
 from src.eval.evaluate_stoch import evaluate_stoch
+from src.models.cvrptw_sed2am_policy import DEFAULT_SED_GATE_BIAS_INIT
 from src.models.factory import (
     DEFAULT_CVRPTW_GATED_CONFIG,
+    DEFAULT_CVRPTW_SED2AM_CONFIG,
     DEFAULT_CVRPTW_STOCH_CONFIG,
     build_cvrptw_gated_policy,
+    build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
 from src.models.gate_checks import assert_gate_chain_inert
@@ -83,15 +86,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--grad-clip", type=float, default=None)
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # variant
-    p.add_argument("--variant", type=str, default="b", choices=["b", "d"],
+    p.add_argument("--variant", type=str, default="b", choices=["b", "c", "d"],
                    help="b = (mu, sigma^2) edge features, no gate; "
+                        "c = b plus a SED2AM-style learned sigmoid gate (the competitor); "
                         "d = b plus the shared monotone variance gate")
     p.add_argument("--gate-init", type=float, default=0.0,
                    help="variant D: initial w; softplus(0)=0.693 starts D as ~B")
     p.add_argument("--gate-lr", type=float, default=1e-2,
-                   help="variant D: dedicated lr for the single gate scalar. At the global "
-                        "3e-4 the gate could not travel far enough in 800 steps for the "
-                        "experiment to be informative in either direction")
+                   help="variants C and D: dedicated lr for the gate parameters. At the "
+                        "global 3e-4 the gate could not travel far enough for the "
+                        "experiment to be informative in either direction. The SAME value "
+                        "is used for both variants, so neither is handicapped")
+    p.add_argument("--sed-gate-bias-init", type=float, default=DEFAULT_SED_GATE_BIAS_INIT,
+                   help="variant C: initial gate bias; sigmoid(2.0)=0.881 starts C as ~B")
     # evaluation
     p.add_argument("--val-size", type=int, default=256)
     p.add_argument("--val-seed", type=int, default=9999)
@@ -137,6 +144,10 @@ def main() -> None:
     if args.variant == "d":
         model_config = {**DEFAULT_CVRPTW_GATED_CONFIG, "gate_init": args.gate_init}
         policy = build_cvrptw_gated_policy(model_config).to(device)
+    elif args.variant == "c":
+        model_config = {**DEFAULT_CVRPTW_SED2AM_CONFIG,
+                        "sed_gate_bias_init": args.sed_gate_bias_init}
+        policy = build_cvrptw_sed2am_policy(model_config).to(device)
     else:
         model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
         policy = build_cvrptw_stoch_policy(model_config).to(device)
@@ -204,8 +215,13 @@ def main() -> None:
     best_val = float("inf")
     last_path = out_path.with_name(out_path.stem + "_last" + out_path.suffix)
     t0 = time.time()
-    gate_note = (f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
-                 if args.variant == "d" else "")
+    if args.variant == "d":
+        gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
+    elif args.variant == "c":
+        gate_note = (f" | SED2AM-style gate, bias_init {args.sed_gate_bias_init} "
+                     f"gate_lr {args.gate_lr:.0e}")
+    else:
+        gate_note = ""
     if args.beta_var_range is not None:
         gate_note += (f" | beta_var randomised over "
                       f"[{args.beta_var_range[0]}, {args.beta_var_range[1]}]")

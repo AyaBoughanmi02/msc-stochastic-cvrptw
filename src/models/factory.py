@@ -7,6 +7,10 @@ from src.models.pointer_decoder import PointerDecoder
 from src.models.policy import CVRPPolicy
 from src.models.cvrptw_policy import CVRPTWPolicy
 from src.models.cvrptw_gated_policy import DEFAULT_GATE_INIT, CVRPTWGatedPolicy
+from src.models.cvrptw_sed2am_policy import (
+    DEFAULT_SED_GATE_BIAS_INIT,
+    CVRPTWSED2AMPolicy,
+)
 from src.models.cvrptw_stoch_policy import CVRPTWStochPolicy
 
 # Default hyperparameters for the CVRP reproduction of Lei et al. (2022).
@@ -24,6 +28,7 @@ DEFAULT_MODEL_CONFIG: dict[str, Any] = {
     "context_extra_dim": 0,  # extra dynamic decoder-context scalars (CVRPTW clock = 1)
     "edge_feat_dim": 0,      # decoder per-candidate edge features (0 CVRP/A; 2 for B/C/D)
     "edge_bias_mode": "pre_tanh",  # 'pre_tanh' (locked) or 'post_tanh' (diagnostic)
+    "sigmoid_gate": False,   # variant C only: SED2AM-style post-softmax gate in the encoder
 }
 
 
@@ -44,6 +49,7 @@ def build_policy(config: dict[str, Any] | None = None) -> CVRPPolicy:
         negative_slope=cfg["negative_slope"],
         norm=cfg["norm"],
         attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],
@@ -96,6 +102,7 @@ def build_cvrptw_policy(config: dict[str, Any] | None = None) -> "CVRPTWPolicy":
         negative_slope=cfg["negative_slope"],
         norm=cfg["norm"],
         attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],
@@ -127,6 +134,7 @@ def build_cvrptw_stoch_policy(
         negative_slope=cfg["negative_slope"],
         norm=cfg["norm"],
         attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],
@@ -146,6 +154,49 @@ DEFAULT_CVRPTW_GATED_CONFIG: dict[str, Any] = {
     **DEFAULT_CVRPTW_STOCH_CONFIG,
     "gate_init": DEFAULT_GATE_INIT,   # softplus(0) = 0.6931; see cvrptw_gated_policy
 }
+
+
+# Variant C: variant B plus a SED2AM-style learned sigmoid gate (encoder + pointer). The
+# competitor to variant D's monotone gate; see src/models/cvrptw_sed2am_policy.py.
+DEFAULT_CVRPTW_SED2AM_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_STOCH_CONFIG,
+    "sigmoid_gate": True,
+    "sed_gate_bias_init": DEFAULT_SED_GATE_BIAS_INIT,   # sigmoid(2.0) = 0.881; C starts ~B
+}
+
+
+def build_cvrptw_sed2am_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWSED2AMPolicy":
+    """Instantiate a CVRPTWSED2AMPolicy (variant C).
+
+    NOTE: like variant D's scalar, C's gate parameters need their own optimizer group
+    (lr 1e-2, no weight decay) or the comparison is unfair -- see build_optimizer in
+    src/train/pomo_stoch.py.
+    """
+    cfg = {**DEFAULT_CVRPTW_SED2AM_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+        sigmoid_gate=True,
+        sigmoid_gate_bias_init=cfg["sed_gate_bias_init"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWSED2AMPolicy(encoder, decoder, gate_bias_init=cfg["sed_gate_bias_init"])
 
 
 def build_cvrptw_gated_policy(
@@ -168,6 +219,7 @@ def build_cvrptw_gated_policy(
         negative_slope=cfg["negative_slope"],
         norm=cfg["norm"],
         attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
     )
     decoder = PointerDecoder(
         hidden_dim=cfg["hidden_dim"],

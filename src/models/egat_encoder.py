@@ -74,6 +74,8 @@ class EGATLayer(MessagePassing):
         n_heads: int,
         negative_slope: float = 0.2,
         attn: str = "scalar",     # 'scalar' (locked) or 'channel' (Lei diagnostic)
+        sigmoid_gate: bool = False,          # variant C: SED2AM-style post-softmax gate
+        sigmoid_gate_bias_init: float = 2.0,  # sigmoid(2.0) = 0.881 at init
     ) -> None:
         # node_dim=0: per-node tensors are indexed along dim 0 by edge_index in
         # both modes ((N, H, hd) for scalar, (N, hidden) for channel).
@@ -98,6 +100,22 @@ class EGATLayer(MessagePassing):
         else:  # channel: Lei's Linear(2*out + edge_channels -> out), raw edge in
             self.attn_lin = nn.Linear(2 * hidden_dim + edge_dim, hidden_dim)
 
+        # Variant C (SED2AM-style gate, Mozhdehi et al. 2025, Eq. 11). Created ONLY when
+        # requested, so A/B/D state_dicts and their RNG consumption at init are unchanged.
+        self.sigmoid_gate = sigmoid_gate
+        self.sigmoid_gate_bias_init = sigmoid_gate_bias_init
+        self.sed_gate_active = True      # plain attribute (not state): inference-time switch
+        if sigmoid_gate:
+            if attn != "scalar":
+                raise ValueError(
+                    "the SED2AM-style gate multiplies a per-head attention weight; it needs "
+                    "attn='scalar'"
+                )
+            # One gate logit per head from this layer's own edge projection W_e e_ij:
+            #   g_ij^h = sigmoid( v_h . (W_e e_ij)^h + c_h )
+            self.sed_gate_w = nn.Parameter(torch.empty(n_heads, self.head_dim))  # (H, hd)
+            self.sed_gate_b = nn.Parameter(torch.empty(n_heads))                 # (H,)
+
         self._alpha: Tensor | None = None  # scratch: last attention weights
         self.reset_parameters()
 
@@ -112,6 +130,13 @@ class EGATLayer(MessagePassing):
         else:
             nn.init.orthogonal_(self.attn_lin.weight, gain=1.0)
             nn.init.zeros_(self.attn_lin.bias)
+        if self.sigmoid_gate:
+            # Deterministic init (no RNG draw), so C's shared weights initialise exactly as
+            # B's under the same seed. Zero weights: the gate starts edge-independent at
+            # sigmoid(bias_init) and learns edge dependence from there (the gradient w.r.t.
+            # sed_gate_w is sigmoid'(.) * e_ij, not zero).
+            nn.init.zeros_(self.sed_gate_w)
+            nn.init.constant_(self.sed_gate_b, self.sigmoid_gate_bias_init)
 
     def forward(
         self,
@@ -171,6 +196,14 @@ class EGATLayer(MessagePassing):
                 # the statements below are identical to the ungated path.
                 score = score - gate.unsqueeze(-1)                              # (E,1)->(E,H)
             alpha = softmax(score, index, num_nodes=size_i)                    # (E,H) over j
+            if self.sigmoid_gate and self.sed_gate_active:
+                # Variant C: SED2AM Eq. 11, a = softmax(u) * sigmoid(g(e_ij)). POST-softmax
+                # and deliberately NOT renormalised (faithful to the paper): the weights of
+                # a target no longer sum to 1, so the gate can shrink a node's whole
+                # incoming message, not only re-rank its neighbours. That is the contrast
+                # with variant D's pre-softmax, renormalised penalty.
+                g = torch.sigmoid((edge * self.sed_gate_w).sum(dim=-1) + self.sed_gate_b)
+                alpha = alpha * g                                              # (E,H)
             self._alpha = alpha
             return x_j * alpha.unsqueeze(-1)                                   # (E,H,hd)
         # channel: full hidden-dim attention vector per edge (Lei GatConv)
@@ -194,6 +227,8 @@ class EGATEncoder(nn.Module):
         negative_slope: float = 0.2,
         norm: str = "batch",      # 'batch' (Lei), 'layer', or 'none'
         attn: str = "scalar",     # 'scalar' (locked) or 'channel' (Lei diagnostic)
+        sigmoid_gate: bool = False,          # variant C: SED2AM-style gate in every layer
+        sigmoid_gate_bias_init: float = 2.0,
     ) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
@@ -204,7 +239,9 @@ class EGATEncoder(nn.Module):
         self.fc_edge = nn.Linear(input_edge_dim, hidden_edge_dim)
         self.bn_edge = _make_norm(norm, hidden_edge_dim)   # name kept for ckpt compat
         self.layers = nn.ModuleList(
-            EGATLayer(hidden_dim, hidden_edge_dim, n_heads, negative_slope, attn)
+            EGATLayer(hidden_dim, hidden_edge_dim, n_heads, negative_slope, attn,
+                      sigmoid_gate=sigmoid_gate,
+                      sigmoid_gate_bias_init=sigmoid_gate_bias_init)
             for _ in range(n_layers)
         )
         self.reset_parameters()

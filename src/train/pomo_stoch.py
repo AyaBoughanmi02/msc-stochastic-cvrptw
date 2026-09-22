@@ -106,7 +106,18 @@ def _resolve_n_starts(data: CVRPTWData, n_starts: int | None) -> int:
     return n_starts
 
 
-GATE_PARAM_NAME = "gate_w"
+GATE_PARAM_NAME = "gate_w"          # variant D: the single monotone-gate scalar
+SED_GATE_TAG = "sed_gate"           # variant C: the SED2AM-style gate parameters
+
+
+def is_gate_param(name: str) -> bool:
+    """True for a gate parameter of variant D (`gate_w`) or variant C (`*sed_gate*`).
+
+    Both variants' gates get the dedicated group, for the same reason and with the same
+    settings: a gate that cannot travel under the global lr produces a null result that
+    says nothing about gating.
+    """
+    return name == GATE_PARAM_NAME or SED_GATE_TAG in name
 
 
 def build_optimizer(
@@ -133,12 +144,12 @@ def build_optimizer(
     softplus(w) = 0.693, an arbitrary attractor that would bias the headline parameter
     toward a value with no meaning.
     """
-    gate = [p for name, p in policy.named_parameters() if name == GATE_PARAM_NAME]
-    base = [p for name, p in policy.named_parameters() if name != GATE_PARAM_NAME]
+    gate = [p for name, p in policy.named_parameters() if is_gate_param(name)]
+    base = [p for name, p in policy.named_parameters() if not is_gate_param(name)]
     groups: list[dict] = [
         {"params": base, "lr": lr, "weight_decay": weight_decay, "name": "base"}
     ]
-    if gate:   # variants A/B/C have no gate parameter; the group is simply absent
+    if gate:   # variants A/B have no gate parameter; the group is simply absent
         groups.append(
             {"params": gate, "lr": gate_lr, "weight_decay": gate_weight_decay,
              "name": "gate"}

@@ -16,6 +16,9 @@ What IS exactly provable is a CHAIN, each link bitwise:
   3. GATE    -- with gate_penalty zeroed (or None), variant D's pointer equals variant B's.
   4. ENCODER -- with the encoder gate zeroed (or None), variant D's encoder equals
                 variant B's, for ANY graph. This guards the final certified-file edit.
+  5. SED GATE -- with variant C's SED2AM-style gates switched off, its encoder equals a
+                gateless encoder holding the same shared weights, and its pointer gate is
+                absent. C then reduces to B exactly, as D does with the gate off.
 
 Stacking B then D can therefore only change behaviour through terms that are switched on,
 never through drift. Cheap enough to call periodically from a training loop; links 2 and 3
@@ -205,6 +208,79 @@ def assert_encoder_gate_inert(
         )
 
 
+@torch.no_grad()
+def assert_sed_gate_inert(policy, n_nodes: int = 6, seed: int = 0) -> None:
+    """Link 5: variant C with its gates OFF must be variant B, bitwise (CPU).
+
+    Same jitter-aware comparison as link 4: on CUDA, PyG's scatter reductions sum with
+    atomics, so two identical calls already differ in the last bits.
+
+    No-op for any policy without SED2AM-style gates (A/B/D), so the chain can be called
+    uniformly from the training loop.
+    """
+    if not hasattr(policy, "set_sed_gates"):
+        return
+    encoder = policy.encoder
+    dev = encoder.fc_node.weight.device
+    dtype = encoder.fc_node.weight.dtype
+    gen = torch.Generator(device=dev).manual_seed(seed)
+    idx = torch.arange(n_nodes, device=dev)
+    edge_index = torch.stack(
+        [idx.repeat_interleave(n_nodes), idx.repeat(n_nodes)], dim=0
+    )                                                              # (2, N*N)
+    x = torch.rand(n_nodes, encoder.fc_node.in_features,
+                   generator=gen, device=dev, dtype=dtype)
+    edge_attr = torch.rand(edge_index.size(1), encoder.fc_edge.in_features,
+                           generator=gen, device=dev, dtype=dtype)
+
+    # A gateless twin holding C's shared weights: what variant B WOULD compute here.
+    reference = EGATEncoder(
+        input_node_dim=encoder.fc_node.in_features,
+        input_edge_dim=encoder.fc_edge.in_features,
+        hidden_dim=encoder.hidden_dim,
+        hidden_edge_dim=encoder.fc_edge.out_features,
+        n_layers=len(encoder.layers),
+        n_heads=encoder.layers[0].n_heads,
+        negative_slope=encoder.layers[0].negative_slope,
+        norm=encoder.norm,
+        attn=encoder.attn,
+    ).to(dev)
+    shared = {k: v.detach().clone() for k, v in encoder.state_dict().items()
+              if "sed_gate" not in k}
+    reference.load_state_dict(shared, strict=True)
+    reference.eval()
+
+    was_training = encoder.training
+    was_active = policy.sed_gate_active
+    encoder.eval()
+    try:
+        policy.set_sed_gates(False)
+        ungated, _ = reference(x, edge_index, edge_attr)
+        repeat, _ = reference(x, edge_index, edge_attr)     # backend jitter baseline
+        off, _ = encoder(x, edge_index, edge_attr)
+    finally:
+        policy.set_sed_gates(was_active)
+        encoder.train(was_training)
+
+    if policy._gate_penalty is not None and policy.sed_gate_active is not was_active:
+        raise RuntimeError("gate chain link 5 broken: the gate switch was not restored")
+
+    if torch.equal(ungated, repeat):                        # deterministic backend
+        if not torch.equal(ungated, off):
+            raise RuntimeError(
+                "gate chain link 5 broken: variant C with its gates OFF does not "
+                "reproduce a gateless encoder with the same weights, bitwise"
+            )
+        return
+    baseline = float((ungated - repeat).abs().max())
+    delta = float((ungated - off).abs().max())
+    if delta > 8.0 * baseline:
+        raise RuntimeError(
+            f"gate chain link 5 broken: C with its gates off moved the node embeddings by "
+            f"{delta:.3e}, more than 8x this backend's own jitter of {baseline:.3e}"
+        )
+
+
 def assert_env_reduces_to_variant_a(
     data: CVRPTWData,
     sim_cfg: SimulatorConfig,
@@ -260,7 +336,11 @@ def assert_gate_chain_inert(
     sim_cfg: SimulatorConfig,
     seed: int = 0,
 ) -> None:
-    """All three links. Call periodically from the training loop and in the test suite."""
+    """All links. Call periodically from the training loop and in the test suite.
+
+    Link 5 is a no-op unless `policy` is variant C.
+    """
     assert_env_reduces_to_variant_a(data, sim_cfg, seed=seed)
     assert_decoder_terms_inert(policy.decoder, seed=seed)
     assert_encoder_gate_inert(policy.encoder, seed=seed)
+    assert_sed_gate_inert(policy, seed=seed)

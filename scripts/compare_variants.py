@@ -18,11 +18,15 @@ the headline test is paired on that quantity directly: for each instance,
 (candidate_ood - candidate_id) - (baseline_ood - baseline_id). A confidence interval that
 sits entirely below zero supports the claim; one that straddles zero does not.
 
-THE GATE SWEEP. With --gate-sweep the candidate's softplus(w) is OVERRIDDEN at inference
+THE GATE ABLATIONS. With --gate-sweep the candidate's softplus(w) is OVERRIDDEN at inference
 time, with no retraining, so the gate's effect is isolated from everything else the
 network learned. If forcing it to 0 reproduces the baseline, the gate is doing work at
 inference. If nothing moves, the gate's contribution was to shape LEARNING rather than to
 act at decision time -- a different finding, and worth knowing which one you have.
+--sed-gate-off is the same ablation for variant C, whose gate has no single scalar to
+sweep: it switches every SED2AM-style gate off at inference, which reduces C's FUNCTION to
+variant B's. A trained C with its gates off is NOT variant B, though: its other weights
+were trained with the gates on and adapted to them, exactly as D's did.
 
 Run from the repo root so `src` is importable.
 """
@@ -59,7 +63,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eval-batch-size", type=int, default=8)
     p.add_argument("--no-augment", action="store_true", help="skip 8x augmentation (faster)")
     p.add_argument("--gate-sweep", type=float, nargs="*", default=None,
-                   help="override softplus(w) at inference, e.g. --gate-sweep 0 0.5 2 4 8")
+                   help="variant D: override softplus(w) at inference, "
+                        "e.g. --gate-sweep 0 0.5 2 4 8")
+    p.add_argument("--sed-gate-off", action="store_true",
+                   help="variant C: also report the candidate with its SED2AM-style gates "
+                        "switched off at inference (C's analogue of softplus(w)=0)")
     p.add_argument("--select-gate-on-val", action="store_true",
                    help="choose the sweep value that is best on a HELD-OUT validation set "
                         "at the in-distribution variance only, then report it on the test "
@@ -118,6 +126,21 @@ def forced_gate(policy, strength: float):
         policy.gate_strength = original
 
 
+@contextmanager
+def sed_gates(policy, active: bool):
+    """Temporarily switch variant C's SED2AM-style gates on or off. Restores on exit.
+
+    With active=False the encoder gate is skipped and the pointer penalty is None, so the
+    computation is variant B's -- see gate-chain link 5.
+    """
+    was = policy.sed_gate_active
+    policy.set_sed_gates(active)
+    try:
+        yield
+    finally:
+        policy.set_sed_gates(was)
+
+
 def main() -> None:
     args = parse_args()
     device = torch.device(args.device)
@@ -149,7 +172,8 @@ def main() -> None:
           f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}\n")
 
     def evaluate(loaded, beta_var: float, instances=None,
-                 strength: float | None = None) -> dict[str, Tensor]:
+                 strength: float | None = None,
+                 gates_off: bool = False) -> dict[str, Tensor]:
         cfg = replace(loaded.sim_cfg, beta_var=beta_var)
         target = data if instances is None else instances
 
@@ -160,6 +184,9 @@ def main() -> None:
                 eval_batch_size=args.eval_batch_size, scenario_seeds=scenario_seeds,
             )
 
+        if gates_off and hasattr(loaded.policy, "set_sed_gates"):
+            with sed_gates(loaded.policy, False):
+                return run()
         if strength is None or not hasattr(loaded.policy, "gate_w"):
             return run()
         with forced_gate(loaded.policy, strength):
@@ -253,6 +280,26 @@ def main() -> None:
             print(f"{strength:>12.4f}{row}{p['mean']:>+16.4f}{tag}")
         print("\n  If softplus(w)=0 reproduces the baseline, the gate acts at INFERENCE.")
         print("  If the row is flat, the gate's contribution was to shape LEARNING.")
+
+    # ------------------------------------------------- variant C: gates off ablation
+    if args.sed_gate_off:
+        if not hasattr(cand.policy, "set_sed_gates"):
+            raise ValueError(
+                "--sed-gate-off needs a variant-C candidate (it has no SED2AM-style gate)"
+            )
+        print("\nSED2AM GATE ABLATION  (candidate's gates switched off at inference; "
+              "no retraining)")
+        cols = "".join(f"{f'cost@{bv:g}':>11}" for bv in args.beta_var)
+        print(f"{'candidate':>12}{cols}")
+        print("-" * (12 + 11 * len(args.beta_var)))
+        for label, off in (("gates on", False), ("gates off", True)):
+            costs = [evaluate(cand, bv, gates_off=off)["cost"] for bv in args.beta_var]
+            print(f"{label:>12}" + "".join(f"{float(c.mean()):>11.4f}" for c in costs))
+        print(f"{'baseline':>12}"
+              + "".join(f"{float(base_cost[bv].mean()):>11.4f}" for bv in args.beta_var))
+        print("\n  Gates off reduces C's FUNCTION to variant B's, but not its WEIGHTS:")
+        print("  they were trained with the gates on. A large gap means the gate acts at")
+        print("  inference; costs worse than the baseline mean the network relies on it.")
 
 
 if __name__ == "__main__":
