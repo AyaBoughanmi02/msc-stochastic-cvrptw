@@ -93,11 +93,19 @@ def score(
     policy: CVRPPolicy, coords: Tensor, demand: Tensor, mode: str, chunk: int
 ) -> Tensor:
     """Chunk over instances (result-preserving except sample_mean's RNG). -> (B,)."""
-    out = [
-        score_chunk(policy, coords[i:i + chunk], demand[i:i + chunk], mode)
-        for i in range(0, coords.shape[0], chunk)
-    ]
-    return torch.cat(out).cpu()
+    out: list[Tensor] = []
+    b = coords.shape[0]
+    t0 = time.time()
+    for k, i in enumerate(range(0, b, chunk)):
+        out.append(score_chunk(policy, coords[i:i + chunk], demand[i:i + chunk], mode).cpu())
+        done = min(i + chunk, b)
+        if k % 20 == 0 or done == b:                           # progress, same line
+            rate = done / max(time.time() - t0, 1e-9)
+            eta = (b - done) / max(rate, 1e-9)
+            print(f"\r  {mode}: {done}/{b}  ({rate:.0f} inst/s, eta {eta / 60:.1f} min)",
+                  end="", flush=True)
+    print("\r" + " " * 70 + "\r", end="", flush=True)
+    return torch.cat(out)
 
 
 def main() -> None:
@@ -107,6 +115,8 @@ def main() -> None:
                    help=".pt from scripts/lei_testset.py; else generate with --test-seed")
     p.add_argument("--test-seed", type=int, default=2024)
     p.add_argument("--test-size", type=int, default=1000)
+    p.add_argument("--limit", type=int, default=None,
+                   help="score only the first LIMIT instances (quick runs)")
     p.add_argument("--ref", type=str, default=None,
                    help="same-instance reference .pt (per-instance gaps)")
     p.add_argument("--modes", type=str, nargs="+", default=list(ALL_MODES),
@@ -133,17 +143,22 @@ def main() -> None:
             args.test_size, n_customers, seed=args.test_seed, device=device
         )
         source = f"generated seed={args.test_seed} ({args.test_size} instances)"
+    if args.limit is not None:
+        coords, demand = coords[:args.limit], demand[:args.limit]
+        source += f", first {coords.shape[0]}"
     if coords.shape[1] != n_customers + 1:
         raise ValueError(f"test set has N={coords.shape[1]}, ckpt n={n_customers}")
 
     ref = None
     if args.ref:
         ref, _ = load_reference(args.ref)
+        if args.limit is not None:
+            ref = ref[:args.limit]
         if ref.shape[0] != coords.shape[0]:
             raise ValueError(f"reference has {ref.shape[0]} costs, test set {coords.shape[0]}")
 
     opt = PUBLISHED_OPT[n_customers]
-    print(f"checkpoint : {args.ckpt}")
+    print(f"checkpoint : {args.ckpt}  (device {device})", flush=True)
     print(f"test set   : {source}")
     print(f"published  : {opt} (Kool Gurobi; Lei's gap = mean/{opt} - 1)")
     if ref is not None:
