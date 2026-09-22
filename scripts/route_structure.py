@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
+from dataclasses import replace
 
 import torch
 from torch import Tensor
@@ -56,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--test-size", type=int, default=256)
     p.add_argument("--test-seed", type=int, default=4242)
     p.add_argument("--n-starts", type=int, default=None)
+    p.add_argument("--beta-var", type=float, default=None,
+                   help="evaluate structure under this variance (default: checkpoint's own)")
     p.add_argument("--tight-slack", type=float, default=0.25,
                    help="an arrival with less slack than this counts as 'tight'")
     p.add_argument("--device", type=str,
@@ -64,9 +67,17 @@ def parse_args() -> argparse.Namespace:
 
 
 @torch.no_grad()
-def route_structure(loaded, data, n_starts: int | None, tight: float) -> dict[str, float]:
-    """Greedy rollout, then replay it to measure slack and route structure."""
+def route_structure(loaded, data, n_starts: int | None, tight: float,
+                    beta_var: float | None = None) -> dict[str, float]:
+    """Greedy rollout, then replay it to measure slack and route structure.
+
+    beta_var overrides the simulator variance, so the structure can be measured in the
+    shifted world where the variants actually differ (the policy SEES the variance through
+    its edge features and, for D, the gate -- so its plan can change with it).
+    """
     policy, sim_cfg = loaded.policy, loaded.sim_cfg
+    if beta_var is not None:
+        sim_cfg = replace(sim_cfg, beta_var=beta_var)
     b = data.coords.size(0)
     starts = (data.coords.size(1) - 1) if n_starts is None else n_starts
 
@@ -85,6 +96,12 @@ def route_structure(loaded, data, n_starts: int | None, tight: float) -> dict[st
     route_starts = torch.zeros(env.batch_size, device=data.coords.device)
     served = torch.zeros(env.batch_size, device=data.coords.device)
     at_depot = torch.ones(env.batch_size, dtype=torch.bool, device=data.coords.device)
+    # Corridor risk: sum of arc variances and arc means over every traversed arc.
+    # risk_ratio = sum(sigma^2) / sum(mu^2) per trajectory -- how UNRELIABLE the chosen
+    # corridors are per unit of travel, independent of how long the route is.
+    sum_s2 = torch.zeros(env.batch_size, device=data.coords.device)
+    sum_mu2 = torch.zeros(env.batch_size, device=data.coords.device)
+    sum_mu = torch.zeros(env.batch_size, device=data.coords.device)
 
     for t in range(actions.size(1)):
         action = actions[:, t]
@@ -95,6 +112,10 @@ def route_structure(loaded, data, n_starts: int | None, tight: float) -> dict[st
         latest = env.time_windows[row, action, 1]
         slack = latest - arrival
         is_customer = action != 0
+        moving = action != env.current_node                     # (B*S,) real arc
+        sum_s2 = sum_s2 + moments[:, SIGMA2] * moving
+        sum_mu2 = sum_mu2 + moments[:, MU] ** 2 * moving
+        sum_mu = sum_mu + moments[:, MU] * moving
 
         if bool(is_customer.any()):
             slacks.append(slack[is_customer])
@@ -119,6 +140,8 @@ def route_structure(loaded, data, n_starts: int | None, tight: float) -> dict[st
         "margin_mean": float(margin_all.mean()),
         "margin_p10": float(margin_all.quantile(0.10)),
         "tight_arrival_rate": float((slack_all < tight).to(torch.float32).mean()),
+        "planned_travel": float(sum_mu.mean()),
+        "risk_ratio": float((sum_s2 / sum_mu2.clamp_min(1e-12)).mean()),
     }
 
 
@@ -131,6 +154,8 @@ _ROWS = [
     ("margin_mean", "mean margin (sd)", "slack measured in standard deviations"),
     ("margin_p10", "margin p10 (sd)", "worst-case safety margin"),
     ("tight_arrival_rate", "tight arrival rate", "share of arrivals with little slack"),
+    ("planned_travel", "planned travel", "expected travel time of the plan (mu)"),
+    ("risk_ratio", "corridor risk ratio", "sum sigma^2 / sum mu^2: unreliability per unit travel"),
 ]
 
 
@@ -149,14 +174,15 @@ def main() -> None:
 
     stats = {}
     for group, loaded_list in (("base", baselines), ("cand", candidates)):
-        per_seed = [route_structure(l, data, args.n_starts, args.tight_slack)
+        per_seed = [route_structure(l, data, args.n_starts, args.tight_slack, args.beta_var)
                     for l in loaded_list]
         stats[group] = {k: statistics.fmean(s[k] for s in per_seed)
                         for k in per_seed[0]}
 
     b_label, c_label = baselines[0].variant, candidates[0].variant
+    bv_label = args.beta_var if args.beta_var is not None else ref.sim_cfg.beta_var
     print(f"ROUTE STRUCTURE on the PLANNED schedule  |  {args.test_size} instances "
-          f"(seed {args.test_seed})")
+          f"(seed {args.test_seed})  |  beta_var {bv_label}")
     print(f"  baseline {b_label}: {len(baselines)} seeds | "
           f"candidate {c_label}: {len(candidates)} seeds | averaged over seeds\n")
     head = f"{'quantity':>20} {b_label:>10} {c_label:>10} {'diff':>9}   what it means"
