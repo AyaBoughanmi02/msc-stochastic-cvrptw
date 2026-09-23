@@ -68,11 +68,18 @@ def parse_args() -> argparse.Namespace:
                         "--beta-var, so the numbers stay comparable across runs")
     p.add_argument("--eta", type=float, default=0.6, help="reliability-field strength")
     p.add_argument("--zeta", type=float, default=0.0,
-                   help="idiosyncratic risk-field strength: how much of sigma^2 is NOT "
-                        "inferable from edge length. 0.0 reproduces the previous model "
-                        "bit-exactly; |eta| + zeta must stay below 1")
+                   help="idiosyncratic RELIABILITY-field strength (multiplicative). 0.0 "
+                        "reproduces the previous model bit-exactly; |eta| + zeta must "
+                        "stay below 1. NOTE this scales r, which multiplies mu^2, so it "
+                        "does NOT decorrelate sigma^2 from edge length -- use --omega")
     p.add_argument("--risk-freq", type=int, default=3,
                    help="spatial frequency of the idiosyncratic risk field (integer)")
+    p.add_argument("--omega", type=float, default=0.0,
+                   help="idiosyncratic SHARE of the variance, in [0, 1]. 0.0 reproduces "
+                        "the geometric model bit-exactly. Higher values replace part of "
+                        "the mu^2 variance with an additive, neighbourhood-driven one, "
+                        "lowering corr(mu, sigma^2) -- the precondition for a "
+                        "variance-specific inductive bias to be able to help at all")
     p.add_argument("--field-scale", type=float, default=0.3)
     p.add_argument("--phase-k", type=float, default=1.0, help="spatial congestion lag")
     p.add_argument("--tardiness-weight", type=float, default=2.0,
@@ -149,7 +156,7 @@ def main() -> None:
         n_bins=args.n_bins, period=args.shift_end, alpha=args.alpha,
         beta_var=args.beta_var, phase_k=args.phase_k, shift_end=args.shift_end,
         eta=args.eta, field_scale=args.field_scale,
-        zeta=args.zeta, risk_freq=args.risk_freq,
+        zeta=args.zeta, risk_freq=args.risk_freq, omega=args.omega,
     )
     # Crash-not-silent: a ripple this strong would make far-corner customers unservable,
     # which breaks feasibility-by-construction and would show up as a stalled rollout.
@@ -271,7 +278,7 @@ def main() -> None:
     print(f"stochastic CVRPTW | seed {args.seed} | cap {args.capacity} "
           f"shift {args.shift_end} "
           f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
-          f"eta {args.eta} zeta {args.zeta} K {args.n_bins} "
+          f"eta {args.eta} zeta {args.zeta} omega {args.omega} K {args.n_bins} "
           f"| tardiness_weight {args.tardiness_weight} "
           f"| reward {args.reward_mode} | effective batch "
           f"{args.batch_size * args.accum_steps}")

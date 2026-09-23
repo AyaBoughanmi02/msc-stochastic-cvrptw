@@ -1,12 +1,14 @@
-"""How large is the variance gate's penalty against the other terms in the pointer logit?
+"""How large is the variance gate's penalty, and is sigma^2 anything but distance restated?
 
 Three questions, one table:
 
-  1. IS sigma^2 INFORMATIVE? The bank sets sigma^2 = beta_var * r * mu^2, so variance is
-     mostly a squared-distance restatement unless the reliability field r decouples them.
-     `corr(mu, sigma^2)` measures exactly how much of the variance signal is redundant
-     with geometry. Close to 1 means a policy can look risk-aware by avoiding long edges,
-     and no variance-specific inductive bias can help.
+  1. IS sigma^2 INFORMATIVE? The bank sets sigma^2 = beta_var * r * shape, and with the
+     default shape = mu^2 variance is mostly a squared-distance restatement.
+     `corr(mu, sigma^2)` measures how much of the variance signal is redundant with
+     geometry. Close to 1 means a policy can look risk-aware simply by avoiding long
+     edges, and NO variance-specific inductive bias can help. eta and zeta only rescale
+     r, which multiplies mu^2, so neither moves this number; `omega` does, because it
+     blends in an additive component.
 
   2. IS THE GATE NUMERICALLY MEANINGFUL? The pointer ranks candidates by
      u_j = compat_j + w_edge . (mu, sigma^2)_j - lambda * sigma^2_j. What matters is not
@@ -16,7 +18,7 @@ Three questions, one table:
 
   3. HOW BIG IS THE FREE PATHWAY? For variants B/C/D the decoder's w_edge has a second
      column multiplying sigma^2 with no sign constraint, competing with the gate. Its
-     spread is reported next to the gate's, which is the dual-pathway problem in numbers.
+     spread sits next to the gate's, which is the dual-pathway problem in numbers.
      Variant D-prime has no such column and prints "--".
 
 Run from the repo root so `src` is importable.
@@ -41,8 +43,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--beta-var", type=float, nargs="+", default=[0.3, 0.6, 0.9])
     p.add_argument("--zeta", type=float, nargs="+", default=None,
-                   help="also report at these idiosyncratic-risk strengths (the "
-                        "checkpoint's own zeta is always included first)")
+                   help="also report at these multiplicative idiosyncratic strengths "
+                        "(the checkpoint's own zeta is always included first)")
+    p.add_argument("--omega", type=float, nargs="+", default=None,
+                   help="also report at these idiosyncratic VARIANCE SHARES -- the knob "
+                        "that actually moves corr(mu, sigma^2)")
     p.add_argument("--gate-sweep", type=float, nargs="+", default=[4.0, 6.0])
     p.add_argument("--size", type=int, default=64)
     p.add_argument("--seed", type=int, default=4242)
@@ -100,12 +105,10 @@ def logit_spread(policy, env) -> float | None:
                 mask = args[4]                                     # positional `mask`
             if mask is not None:
                 u = u.masked_fill(mask, float("nan"))
-            # Rows with fewer than two feasible candidates have no meaningful spread.
-            sd = torch.nanmean(
-                torch.nan_to_num(
-                    (u - u.nanmean(dim=-1, keepdim=True)).square(), nan=0.0
-                ).sum(dim=-1, keepdim=True).sqrt()
+            centred = torch.nan_to_num(
+                (u - u.nanmean(dim=-1, keepdim=True)).square(), nan=0.0
             )
+            sd = torch.nanmean(centred.sum(dim=-1, keepdim=True).sqrt())
             if torch.isfinite(sd):
                 spreads.append(float(sd))
         return out
@@ -139,10 +142,15 @@ def main() -> None:
     lam = (float(loaded.policy.gate_strength().detach())
            if hasattr(loaded.policy, "gate_strength") else None)
 
-    zetas = [float(loaded.sim_cfg.zeta)]
+    # (zeta, omega) combinations: the checkpoint's own first, then whatever was asked for.
+    base = (float(loaded.sim_cfg.zeta), float(getattr(loaded.sim_cfg, "omega", 0.0)))
+    combos = [base]
     for z in (args.zeta or []):
-        if float(z) not in zetas:
-            zetas.append(float(z))
+        if (float(z), base[1]) not in combos:
+            combos.append((float(z), base[1]))
+    for o in (args.omega or []):
+        if (base[0], float(o)) not in combos:
+            combos.append((base[0], float(o)))
 
     print(f"{args.checkpoint}  (variant {loaded.variant})")
     print(f"  decoder w_edge {None if w is None else w.tolist()} | learned softplus(w) "
@@ -150,15 +158,20 @@ def main() -> None:
     print(f"  {args.size} instances (seed {args.seed}); decoder terms read at the depot, "
           f"bin 0\n")
 
-    header = (f"{'zeta':>6} {'beta':>6} {'corr(mu,s2)':>12} {'mean s2':>10} "
+    header = (f"{'zeta':>6} {'omega':>6} {'beta':>6} {'corr(mu,s2)':>12} {'mean s2':>10} "
               f"{'sd_j mu-term':>13} {'sd_j s2-term':>13}"
               + "".join(f"{f'sd_j gate@{g:g}':>15}" for g in args.gate_sweep))
     print(header)
     print("-" * len(header))
 
-    for zeta in zetas:
+    for zeta, omega in combos:
         for beta in args.beta_var:
-            cfg = replace(loaded.sim_cfg, beta_var=beta, zeta=zeta)
+            try:
+                cfg = replace(loaded.sim_cfg, beta_var=beta, zeta=zeta, omega=omega)
+            except ValueError as exc:
+                # e.g. |eta| + zeta >= 1. Report and move on rather than killing the sweep.
+                print(f"{zeta:>6.2f} {omega:>6.2f} {beta:>6.2f}   skipped: {exc}")
+                continue
             bank = build_edge_bank(data.coords, cfg)                # (B,N,N,K,2)
             hz = horizon_average(bank)                              # (B,N,N,2)
             corr = correlation(offdiag(hz[..., MU]), offdiag(hz[..., SIGMA2]))
@@ -172,14 +185,15 @@ def main() -> None:
             s2_term = (w[0, SIGMA2] * sigma2) if has_free_sigma else None
             gates = [candidate_spread(g * sigma2) for g in args.gate_sweep]
 
-            print(f"{zeta:>6.2f} {beta:>6.2f} {corr:>12.4f} "
+            print(f"{zeta:>6.2f} {omega:>6.2f} {beta:>6.2f} {corr:>12.4f} "
                   f"{float(sigma2.mean()):>10.4f} "
                   f"{candidate_spread(mu_term):>13.4f} "
                   f"{('--' if s2_term is None else f'{candidate_spread(s2_term):.4f}'):>13} "
                   + "".join(f"{g:>15.4f}" for g in gates))
 
     if not args.no_rollout:
-        cfg = replace(loaded.sim_cfg, beta_var=args.beta_var[0], zeta=zetas[0])
+        zeta, omega = combos[0]
+        cfg = replace(loaded.sim_cfg, beta_var=args.beta_var[0], zeta=zeta, omega=omega)
         bank = build_edge_bank(data.coords, cfg)
         env = CVRPTWStochEnv(
             data.coords, data.demand, data.capacity, data.time_windows,
@@ -194,11 +208,12 @@ def main() -> None:
         if ref is not None:
             print(f"\n  REFERENCE: spread of the pointer's tanh argument across feasible "
                   f"candidates = {ref:.4f}")
-            print(f"  (at zeta={zetas[0]:g}, beta={args.beta_var[0]:g}. A gate spread far "
-                  f"below this cannot re-rank; far above it saturates the tanh.)")
+            print(f"  (at zeta={zeta:g}, omega={omega:g}, beta={args.beta_var[0]:g}. A gate "
+                  f"spread far below this cannot re-rank; far above it saturates the tanh.)")
 
     print("\n  corr(mu, sigma^2) near 1 => variance is a restatement of distance and no")
-    print("  variance-specific bias can help. Raising zeta is what breaks that shortcut.")
+    print("  variance-specific bias can help. omega is the knob that breaks that; zeta")
+    print("  and eta only rescale r, which multiplies mu^2, so they cannot.")
 
 
 if __name__ == "__main__":

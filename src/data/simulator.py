@@ -20,7 +20,10 @@ Moment model (the "ripple"), for bin centres tau_k = (k + 0.5) * shift_end / K:
                                                                   peaks later away from the
                                                                   centre)
     mu_ij(tau)      = d_ij * (1 + alpha * sin(2*pi*(tau - phase_ij) / T))
-    sigma^2_ij(tau) = beta_var * r_ij * mu_ij(tau)^2              heteroscedastic
+    sigma^2_ij(tau) = beta_var * r_ij * shape_ij(tau)             heteroscedastic
+
+where `shape` is `mu^2` by default and `omega` blends in an additive, non-geometric
+component (see the `omega` field below).
 
 `alpha < 1` keeps `mu > 0`. With `T == shift_end` the K bin centres are equally spaced
 over one full cycle, so `mean_k sin(.) == 0` exactly: the ripple is MEAN-PRESERVING
@@ -46,6 +49,14 @@ smooth spatial reliability field
 ("central corridors are less reliable at equal length"), which decouples sigma^2 from mu
 WITHOUT touching mu at all -- so the instance calibration is untouched and `beta_var`
 remains the pure magnitude knob for the out-of-distribution experiment.
+
+MEASURED CAVEAT (this is why `omega` exists). `eta` and `zeta` both act through `r`, and
+`r` MULTIPLIES mu^2. A mild multiplicative modulation of a quantity that already spans an
+order of magnitude leaves it essentially unchanged in rank: corr(mu_bar, sigma_bar^2) was
+measured at 0.934 with eta = 0.6, zeta = 0, and 0.929 with zeta = 0.3. So neither knob
+makes variance carry information that edge length does not already carry, and no
+variance-specific inductive bias can pay off in that regime. `omega` fixes this by adding
+a component that is not proportional to mu^2 at all.
 
 Sampling
 --------
@@ -91,7 +102,7 @@ class SimulatorConfig:
     n_bins:      K, number of time bins the shift is discretised into.
     period:      T of the congestion sine. T == shift_end => one mean-preserving cycle/day.
     alpha:       ripple amplitude, 0 <= alpha < 1 (alpha < 1 keeps mu > 0).
-    beta_var:    variance scale; sigma^2 = beta_var * r * mu^2. THE OOD MAGNITUDE KNOB.
+    beta_var:    variance scale; sigma^2 = beta_var * r * shape. THE OOD MAGNITUDE KNOB.
     phase_k:     spatial congestion-lag coefficient (phase = phase_k * radius).
     shift_end:   per-route shift horizon; must match the generator/env value.
     eta:         reliability-field strength, -1 < eta < 1. 0.0 == the locked homogeneous
@@ -103,10 +114,10 @@ class SimulatorConfig:
                  policy that memorised "central edges are risky" mis-generalises while one
                  that penalises the actual sigma^2 stays correctly ordered by construction.
     field_scale: gaussian width of the reliability field, in coordinate units.
-    zeta:        strength of the IDIOSYNCRATIC risk field, 0 <= zeta < 1. 0.0 (the
+    zeta:        strength of the IDIOSYNCRATIC RELIABILITY field, 0 <= zeta < 1. 0.0 (the
                  default) reproduces the previous model bit-exactly. It makes some
-                 corridors unreliable for reasons UNRELATED to their length or their
-                 position relative to the centre:
+                 corridors unreliable for reasons UNRELATED to their position relative to
+                 the centre:
 
                      u_i    = 0.5 * (1 + cos(2*pi*f*x_i) * cos(2*pi*f*y_i))   in [0, 1]
                      s_ij   = 0.5 * (u_i + u_j)                               in [0, 1]
@@ -114,11 +125,11 @@ class SimulatorConfig:
 
                  Motivation (Herrera et al., risk-aware CVRPTW under persistent
                  disruptions): real unreliability is a property of neighbourhoods and
-                 corridors, not of distance. With zeta = 0 the model's sigma^2 is close to
-                 a deterministic function of mu, so a policy can look risk-aware simply by
-                 avoiding long edges; zeta > 0 removes that shortcut, which is what makes
-                 a variance-specific inductive bias testable. mu is NOT touched, so the
-                 instance calibration and the reachability floor are unchanged.
+                 corridors, not of distance. NOTE it is MULTIPLICATIVE (it scales r), so
+                 on its own it does NOT decorrelate sigma^2 from edge length -- see the
+                 measured caveat in the module docstring, and `omega` below. mu is NOT
+                 touched, so the instance calibration and the reachability floor are
+                 unchanged.
 
                  The integer frequency f (`risk_freq`) makes u_i invariant under the 8
                  dihedral maps of the unit square (cos(2*pi*f*(1-x)) == cos(2*pi*f*x) for
@@ -126,6 +137,25 @@ class SimulatorConfig:
                  stays augmentation-invariant -- the precondition for 8x evaluation.
     risk_freq:   integer spatial frequency of that field; higher = finer-grained
                  neighbourhoods. Must be a positive integer (see invariance above).
+    omega:       share of the variance that is IDIOSYNCRATIC RATHER THAN GEOMETRIC,
+                 0 <= omega <= 1. 0.0 (the default) reproduces the previous model
+                 bit-exactly. Unlike eta and zeta, which rescale `r` and therefore only
+                 modulate mu^2, omega blends in an ADDITIVE component:
+
+                     v_ij   = u_i + u_j                       (mean ~ 1, same field as zeta)
+                     shape  = (1 - omega) * mu^2 + omega * v_ij * mean_offdiag(mu^2)
+
+                 At omega = 1 an edge's variance is set by WHICH NEIGHBOURHOODS it
+                 connects rather than by how long it is, while the instance's AVERAGE
+                 variance is unchanged -- so omega moves the SOURCE of the variance and
+                 beta_var alone remains its magnitude. This is the knob that actually
+                 lowers corr(mu, sigma^2), which is the precondition for any
+                 variance-specific inductive bias to be able to help.
+
+                 The additive part is zeroed on the diagonal, so the self-loop stays
+                 exactly (mu, sigma^2) = (0, 0) and variant A remains bit-exact. It is
+                 also constant in the time bin: idiosyncratic unreliability is a property
+                 of a corridor, not of rush hour.
     """
 
     n_bins: int = 24
@@ -138,6 +168,7 @@ class SimulatorConfig:
     field_scale: float = 0.3
     zeta: float = 0.0
     risk_freq: int = 3
+    omega: float = 0.0
 
     def __post_init__(self) -> None:
         if self.n_bins < 1:
@@ -171,6 +202,11 @@ class SimulatorConfig:
             raise ValueError(
                 f"risk_freq must be a positive INTEGER (dihedral invariance of the "
                 f"idiosyncratic field depends on it), got {self.risk_freq}"
+            )
+        if not 0.0 <= self.omega <= 1.0:
+            raise ValueError(
+                f"omega must be in [0, 1] -- it is the idiosyncratic SHARE of the "
+                f"variance, not a magnitude -- got {self.omega}"
             )
 
     @property
@@ -221,6 +257,19 @@ def assert_ripple_reachable(cfg: SimulatorConfig, service_time: float) -> None:
         )
 
 
+def _node_risk_score(coords: Tensor, risk_freq: int) -> Tensor:
+    """Per-node idiosyncratic risk score u_i in [0, 1]. coords: (B, N, 2) -> (B, N).
+
+    Dihedral-invariant for INTEGER `risk_freq` (cos(2*pi*f*(1-x)) == cos(2*pi*f*x), and the
+    product is symmetric in x and y), which is what keeps the Edge Bank -- and therefore
+    8x-augmented evaluation -- invariant under the square's symmetries. Shared by `zeta`
+    (multiplicative) and `omega` (additive) so the two knobs describe the SAME underlying
+    geography and can be compared.
+    """
+    f = 2.0 * math.pi * float(risk_freq)
+    return 0.5 * (1.0 + torch.cos(f * coords[..., 0]) * torch.cos(f * coords[..., 1]))
+
+
 def build_edge_bank(coords: Tensor, cfg: SimulatorConfig) -> Tensor:
     """Build the Edge Bank of travel-time moments for a batch of instances.
 
@@ -255,7 +304,7 @@ def build_edge_bank(coords: Tensor, cfg: SimulatorConfig) -> Tensor:
     )                                                                # (B, N, N, K)
     mu = d.unsqueeze(-1) * (1.0 + cfg.alpha * torch.sin(angle))      # (B, N, N, K)
 
-    # sigma^2_ij(tau_k) = beta_var * r_ij * mu^2, r == 1 exactly when eta == zeta == 0.
+    # Reliability r_ij == 1 exactly when eta == zeta == 0.
     if cfg.eta == 0.0 and cfg.zeta == 0.0:
         reliability = torch.ones(1, 1, 1, device=dev, dtype=dtype)   # (1, 1, 1) broadcast
     else:
@@ -265,13 +314,33 @@ def build_edge_bank(coords: Tensor, cfg: SimulatorConfig) -> Tensor:
             # Idiosyncratic ("bad neighbourhood") risk: a per-NODE score built from a
             # dihedral-invariant spatial pattern, averaged over the edge's endpoints. It
             # is deterministic given the coordinates -- the bank must stay a pure function
-            # of (coords, cfg) -- but it is essentially uncorrelated with edge LENGTH,
-            # which is the whole point.
-            f = 2.0 * math.pi * float(cfg.risk_freq)
-            u = 0.5 * (1.0 + torch.cos(f * coords[..., 0]) * torch.cos(f * coords[..., 1]))
+            # of (coords, cfg) -- but it is essentially uncorrelated with edge POSITION.
+            # It is MULTIPLICATIVE, so it does not decorrelate sigma^2 from edge LENGTH;
+            # that is omega's job below.
+            u = _node_risk_score(coords, cfg.risk_freq)               # (B, N)
             s = 0.5 * (u.unsqueeze(2) + u.unsqueeze(1))               # (B, N, N) in [0, 1]
             reliability = reliability + cfg.zeta * (2.0 * s - 1.0)    # (B, N, N)
-    sigma2 = cfg.beta_var * reliability.unsqueeze(-1) * mu.square()   # (B, N, N, K)
+
+    # Variance SHAPE: the geometric mu^2, blended with an ADDITIVE idiosyncratic part.
+    # omega == 0 leaves `mu.square()` untouched, so the previous model is bit-exact.
+    if cfg.omega == 0.0:
+        var_shape = mu.square()                                       # (B, N, N, K)
+    else:
+        u = _node_risk_score(coords, cfg.risk_freq)                   # (B, N)
+        v = u.unsqueeze(2) + u.unsqueeze(1)                           # (B, N, N), mean ~1
+        off = (d > 0.0).to(dtype)                                     # (B, N, N) no self-loops
+        mu2 = mu.square()                                             # (B, N, N, K)
+        # Per-instance mean of mu^2 over REAL edges: keeps an instance's average variance
+        # unchanged as omega moves, so omega shifts the SOURCE of the variance without
+        # also shifting its magnitude (which stays beta_var's job alone).
+        denom = off.sum(dim=(1, 2)).clamp_min(1.0)                    # (B,)
+        scale = (mu2.mean(dim=3) * off).sum(dim=(1, 2)) / denom       # (B,)
+        additive = v * off * scale.view(b, 1, 1)                      # (B, N, N)
+        var_shape = (
+            (1.0 - cfg.omega) * mu2 + cfg.omega * additive.unsqueeze(-1)
+        )                                                             # (B, N, N, K)
+
+    sigma2 = cfg.beta_var * reliability.unsqueeze(-1) * var_shape     # (B, N, N, K)
 
     return torch.stack([mu, sigma2], dim=-1)                          # (B, N, N, K, 2)
 
