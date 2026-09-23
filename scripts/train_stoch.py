@@ -1,4 +1,4 @@
-"""Train a stochastic CVRPTW policy (variant B, later C/D) with POMO.
+"""Train a stochastic CVRPTW policy (variant B, C, D or D-prime) with POMO.
 
 Example:
     python scripts/train_stoch.py --n-customers 20 --steps 800 --beta-var 0.3 \
@@ -36,9 +36,11 @@ from src.eval.evaluate_stoch import evaluate_stoch
 from src.models.cvrptw_sed2am_policy import DEFAULT_SED_GATE_BIAS_INIT
 from src.models.factory import (
     DEFAULT_CVRPTW_GATED_CONFIG,
+    DEFAULT_CVRPTW_GATEONLY_CONFIG,
     DEFAULT_CVRPTW_SED2AM_CONFIG,
     DEFAULT_CVRPTW_STOCH_CONFIG,
     build_cvrptw_gated_policy,
+    build_cvrptw_gateonly_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
@@ -92,17 +94,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--grad-clip", type=float, default=None)
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # variant
-    p.add_argument("--variant", type=str, default="b", choices=["b", "c", "d"],
+    p.add_argument("--variant", type=str, default="b",
+                   choices=["b", "c", "d", "dprime"],
                    help="b = (mu, sigma^2) edge features, no gate; "
                         "c = b plus a SED2AM-style learned sigmoid gate (the competitor); "
-                        "d = b plus the shared monotone variance gate")
+                        "d = b plus the shared monotone variance gate; "
+                        "dprime = d with sigma^2 REMOVED from the encoder edge feature and "
+                        "from the decoder's w_edge, so the gate is the only path from "
+                        "variance to a decision and the monotone constraint actually binds")
     p.add_argument("--gate-init", type=float, default=0.0,
-                   help="variant D: initial w; softplus(0)=0.693 starts D as ~B")
+                   help="variants D/D-prime: initial w; softplus(0)=0.693 starts D as ~B")
     p.add_argument("--gate-lr", type=float, default=1e-2,
-                   help="variants C and D: dedicated lr for the gate parameters. At the "
-                        "global 3e-4 the gate could not travel far enough for the "
+                   help="variants C, D and D-prime: dedicated lr for the gate parameters. "
+                        "At the global 3e-4 the gate could not travel far enough for the "
                         "experiment to be informative in either direction. The SAME value "
-                        "is used for both variants, so neither is handicapped")
+                        "is used for every variant, so none is handicapped")
     p.add_argument("--sed-gate-bias-init", type=float, default=DEFAULT_SED_GATE_BIAS_INIT,
                    help="variant C: initial gate bias; sigmoid(2.0)=0.881 starts C as ~B")
     # evaluation
@@ -155,7 +161,10 @@ def main() -> None:
             f"the instance calibration"
         )
 
-    if args.variant == "d":
+    if args.variant == "dprime":
+        model_config = {**DEFAULT_CVRPTW_GATEONLY_CONFIG, "gate_init": args.gate_init}
+        policy = build_cvrptw_gateonly_policy(model_config).to(device)
+    elif args.variant == "d":
         model_config = {**DEFAULT_CVRPTW_GATED_CONFIG, "gate_init": args.gate_init}
         policy = build_cvrptw_gated_policy(model_config).to(device)
     elif args.variant == "c":
@@ -176,6 +185,17 @@ def main() -> None:
         )
 
     train_gen = torch.Generator(device=device).manual_seed(args.seed)
+
+    # The gate chain asserts that each stacked term is inert when switched off, and its
+    # links were written against B/C/D, whose decoder reads BOTH moments. D-prime's
+    # decoder reads mu alone, so the w_edge link no longer describes it. Skipped rather
+    # than silently passing a weaker check -- and skipped HERE, before the run starts,
+    # so a stale assertion cannot kill a training job at step 200.
+    gate_check_every = args.gate_check_every
+    if args.variant == "dprime" and gate_check_every:
+        print("  note: gate-chain checks skipped for variant D-prime (the w_edge link "
+              "assumes a 2-dim decoder edge map); extend gate_checks.py to restore them")
+        gate_check_every = 0
 
     # Training-time simulator config: one fixed level, or resampled per mini-batch.
     if args.beta_var_range is None:
@@ -234,7 +254,10 @@ def main() -> None:
             f"({args.eval_every}): checkpoints are written at evaluation steps"
         )
     t0 = time.time()
-    if args.variant == "d":
+    if args.variant == "dprime":
+        gate_note = (f" | gate-ONLY variance path | gate_init {args.gate_init} "
+                     f"gate_lr {args.gate_lr:.0e}")
+    elif args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
     elif args.variant == "c":
         gate_note = (f" | SED2AM-style gate, bias_init {args.sed_gate_bias_init} "
@@ -264,12 +287,12 @@ def main() -> None:
         if scheduler is not None:
             scheduler.step()
 
-        if args.gate_check_every and step % args.gate_check_every == 0:
+        if gate_check_every and step % gate_check_every == 0:
             # Mutates nothing; raises if any stacked term stopped being inert when off.
             assert_gate_chain_inert(policy, val, sim_cfg, seed=step)
 
         if args.log_every and step % args.log_every == 0:
-            # softplus_w appears here for variant D via the policy_metrics hook.
+            # softplus_w appears here for variants D/D-prime via the policy_metrics hook.
             extra = "".join(
                 f" | {k} {v:.4f}" for k, v in metrics.items()
                 if k not in ("loss", "mean_cost", "mean_distance", "mean_tardiness",

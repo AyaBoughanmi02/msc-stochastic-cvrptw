@@ -8,6 +8,10 @@ The variant is inferred from the SAVED WEIGHTS, not from a flag: a variant-D che
 carries the gate scalar `gate_w`, a variant-B one does not. That way an older checkpoint
 without a 'variant' key still loads, and a mislabelled one cannot be silently rebuilt as
 the wrong architecture (load_state_dict(strict=True) would refuse anyway).
+
+D and D-prime both carry `gate_w`, so they are separated by the WIDTH of the decoder's
+per-candidate edge map: D reads (mu, sigma^2) and has a 1x2 `w_edge`; D-prime reads mu
+alone and has a 1x1 one, because its only path from variance to a decision is the gate.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import torch
 from src.data.simulator import SimulatorConfig
 from src.models.factory import (
     build_cvrptw_gated_policy,
+    build_cvrptw_gateonly_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
@@ -33,7 +38,19 @@ class LoadedPolicy(NamedTuple):
     policy: torch.nn.Module
     sim_cfg: SimulatorConfig      # the simulator it was trained under
     blob: dict                    # the raw checkpoint (instance dials, val stats, ...)
-    variant: str                  # 'B', 'C' or 'D', inferred from the weights
+    variant: str                  # 'B', 'C', 'D' or "D'", inferred from the weights
+
+
+def _decoder_edge_width(state: dict, model_config: dict) -> int:
+    """Number of edge features the decoder's per-candidate map consumes.
+
+    Read from the weight itself so the architecture, not a label, decides. Falls back to
+    the saved config for a checkpoint whose decoder has no edge map at all.
+    """
+    for key, tensor in state.items():
+        if key.endswith("w_edge.weight"):
+            return int(tensor.shape[1])           # (1, edge_feat_dim)
+    return int(model_config.get("edge_feat_dim", 0))
 
 
 def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPolicy:
@@ -51,10 +68,14 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
                 f"checkpoint written by scripts/train_stoch.py"
             )
     state = blob["model_state"]
-    # Variant is inferred from the WEIGHTS: D carries the single scalar `gate_w`, C carries
-    # the SED2AM-style gate parameters, B carries neither.
+    # Variant is inferred from the WEIGHTS: D and D-prime carry the single scalar `gate_w`
+    # (and differ in how wide the decoder's edge map is), C carries the SED2AM-style gate
+    # parameters, B carries neither.
     if GATE_PARAM_NAME in state:
-        variant, builder = "D", build_cvrptw_gated_policy
+        if _decoder_edge_width(state, blob["model_config"]) == 1:
+            variant, builder = "D'", build_cvrptw_gateonly_policy
+        else:
+            variant, builder = "D", build_cvrptw_gated_policy
     elif any(SED_GATE_TAG in k for k in state):
         variant, builder = "C", build_cvrptw_sed2am_policy
     else:
