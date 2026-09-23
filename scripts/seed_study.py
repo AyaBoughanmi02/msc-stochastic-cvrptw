@@ -43,6 +43,7 @@ from torch import Tensor
 
 from src.data.cvrptw_generator import generate_cvrptw
 from src.eval.checkpoints import load_stoch_policy
+from scripts.compare_variants import _selection_betas, forced_gate
 from src.eval.evaluate_stoch import evaluate_stoch
 
 # Two-sided 95% t critical values by degrees of freedom, for small seed counts.
@@ -57,12 +58,13 @@ def parse_args() -> argparse.Namespace:
                    help="one checkpoint per training seed")
     p.add_argument("--candidate", type=str, nargs="+", required=True)
     p.add_argument("--shift-param", type=str, default="beta_var",
-                   choices=["beta_var", "eta", "field_scale", "alpha"],
+                   choices=["beta_var", "eta", "field_scale", "alpha", "zeta"],
                    help="which simulator parameter to shift. 'beta_var' is a MAGNITUDE "
                         "shift (everything gets uniformly riskier, the risk RANKING is "
                         "unchanged). 'eta' is a STRUCTURAL shift: flipping its sign "
                         "inverts WHICH corridors are unreliable while keeping the amount "
-                        "of heterogeneity identical")
+                        "of heterogeneity identical. 'zeta' shifts how much risk is "
+                        "idiosyncratic, i.e. NOT inferable from edge length")
     p.add_argument("--shift-values", type=float, nargs="+", default=None,
                    help="values of --shift-param to evaluate; the FIRST must be the "
                         "trained value, since it is treated as in-distribution")
@@ -74,6 +76,23 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-starts", type=int, default=None)
     p.add_argument("--eval-batch-size", type=int, default=8)
     p.add_argument("--no-augment", action="store_true")
+    p.add_argument("--gate-sweep", type=float, nargs="+", default=None,
+                   help="variant D only: candidate gate strengths to choose from. With "
+                        "--select-gate-on-val the best is picked PER SEED on held-out "
+                        "in-distribution instances and then used for every reported "
+                        "number; without it, this flag does nothing")
+    p.add_argument("--select-gate-on-val", action="store_true",
+                   help="calibrate softplus(w) after training, per seed, on held-out "
+                        "instances drawn from the TRAINED variance distribution. Training "
+                        "under-shoots the gate, and this is the only post-hoc knob the "
+                        "monotone parameterisation offers; no test instance and no "
+                        "shifted variance is consulted")
+    p.add_argument("--gate-val-seed", type=int, default=777,
+                   help="instances for gate selection; must differ from --test-seed")
+    p.add_argument("--gate-val-size", type=int, default=512)
+    p.add_argument("--gate-val-beta", type=float, nargs="+", default=None,
+                   help="variance levels for selection; default = the trained range's "
+                        "ends and midpoint (see scripts/compare_variants.py)")
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -130,12 +149,61 @@ def main() -> None:
         tw_half_width=ref.blob["tw_half_width"], seed=args.test_seed, device=device,
     )
 
+    # ---------------------------------------- per-seed gate calibration (variant D only)
+    selected: dict[int, float] = {}
+    if args.select_gate_on_val:
+        if args.gate_sweep is None:
+            raise ValueError("--select-gate-on-val requires --gate-sweep")
+        if args.gate_val_seed == args.test_seed:
+            raise ValueError(
+                "--gate-val-seed must differ from --test-seed, or the gate would be "
+                "chosen on the very instances it is then reported on"
+            )
+        missing = [i for i, c in enumerate(candidates) if not hasattr(c.policy, "gate_w")]
+        if missing:
+            raise ValueError(
+                f"--select-gate-on-val needs variant-D candidates; checkpoint(s) "
+                f"{[args.candidate[i] for i in missing]} have no gate scalar"
+            )
+        val = generate_cvrptw(
+            args.gate_val_size, ref.blob["n_customers"], ref.blob["capacity"],
+            service_time=ref.blob["service_time"], shift_end=ref.blob["shift_end"],
+            tw_half_width=ref.blob["tw_half_width"], seed=args.gate_val_seed,
+            device=device,
+        )
+        print(f"GATE CALIBRATION per seed on {args.gate_val_size} held-out instances "
+              f"(seed {args.gate_val_seed}), at in-distribution variance(s) only")
+        print(f"{'seed':>6} {'learned':>9} {'selected':>9} {'val cost':>10}")
+        print("-" * 36)
+        for idx, loaded in enumerate(candidates):
+            betas = _selection_betas(args, loaded)
+            scores = {}
+            for strength in args.gate_sweep:
+                with forced_gate(loaded.policy, strength):
+                    per_beta = [
+                        float(evaluate_stoch(
+                            loaded.policy, val, replace(loaded.sim_cfg, beta_var=b),
+                            tardiness_weight=weight, n_starts=args.n_starts,
+                            augment=augment, eval_batch_size=args.eval_batch_size,
+                            scenario_seeds=scenario_seeds,
+                        )["cost"].mean())
+                        for b in betas
+                    ]
+                scores[strength] = sum(per_beta) / len(per_beta)
+            selected[idx] = min(scores, key=scores.get)
+            learned = float(loaded.policy.gate_strength().detach())
+            print(f"{idx + 1:>6} {learned:>9.4f} {selected[idx]:>9.4g} "
+                  f"{scores[selected[idx]]:>10.4f}")
+        print()
+
     print(f"baseline  ({baselines[0].variant}): {len(baselines)} seeds")
     print(f"candidate ({candidates[0].variant}): {len(candidates)} seeds")
     kind = "structural" if param in ("eta", "field_scale") else "magnitude"
     print(f"  shifting {param} over {values}  ({kind} shift; trained at {trained})")
+    note = (f" | candidate gate CALIBRATED per seed on held-out data"
+            if selected else "")
     print(f"  tardiness_weight {weight} FIXED | {args.test_size} instances "
-          f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}\n")
+          f"(seed {args.test_seed}) | {args.scenarios} days | augment={augment}{note}\n")
 
     # costs[group][value][seed] -> (n_instances,)
     # Every table below needs the full grid, so nothing can be printed until the last
@@ -153,11 +221,20 @@ def main() -> None:
             per_seed = []
             for seed_idx, loaded in enumerate(loaded_list):
                 cfg = replace(loaded.sim_cfg, **{param: value})
-                per_seed.append(evaluate_stoch(
-                    loaded.policy, data, cfg, tardiness_weight=weight,
-                    n_starts=args.n_starts, augment=augment,
-                    eval_batch_size=args.eval_batch_size, scenario_seeds=scenario_seeds,
-                )["cost"])
+
+                def run() -> Tensor:
+                    return evaluate_stoch(
+                        loaded.policy, data, cfg, tardiness_weight=weight,
+                        n_starts=args.n_starts, augment=augment,
+                        eval_batch_size=args.eval_batch_size,
+                        scenario_seeds=scenario_seeds,
+                    )["cost"]
+
+                if group == "cand" and seed_idx in selected:
+                    with forced_gate(loaded.policy, selected[seed_idx]):
+                        per_seed.append(run())
+                else:
+                    per_seed.append(run())
                 done += 1
                 elapsed = time.time() - t0
                 eta_s = elapsed / done * (total - done)

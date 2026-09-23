@@ -77,6 +77,18 @@ def parse_args() -> argparse.Namespace:
                    help="instances for gate selection; must differ from --test-seed AND "
                         "from the training validation seed")
     p.add_argument("--gate-val-size", type=int, default=128)
+    p.add_argument("--gate-val-beta", type=float, nargs="+", default=None,
+                   help="variance levels the gate is selected on. DEFAULT: the training "
+                        "distribution recorded in the checkpoint (--beta-var-range, "
+                        "sampled at its two ends and its midpoint), NOT a single point. "
+                        "Selecting at one beta_var is under-powered: in-distribution cost "
+                        "is nearly flat in the gate strength, while out-of-distribution "
+                        "cost is not, so the selection signal is weakest where the "
+                        "decision matters most. Averaging over the TRAINED range keeps "
+                        "the procedure strictly in-distribution while giving it the "
+                        "stronger signal of the range's upper end. Pass values "
+                        "explicitly to override; any value outside the trained range is "
+                        "refused, because that would leak the shift into the selection")
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -139,6 +151,38 @@ def sed_gates(policy, active: bool):
         yield
     finally:
         policy.set_sed_gates(was)
+
+
+def _selection_betas(args, cand) -> list[float]:
+    """Variance levels to select the gate on -- strictly inside the TRAINING distribution.
+
+    The checkpoint records `beta_var_range`, the range domain randomisation drew from
+    during training. Validating at a single point inside it (the old behaviour) is
+    legitimate but weak: in-distribution cost barely moves with the gate strength, so the
+    choice is dominated by validation noise. The two ends and the midpoint of the trained
+    range are still entirely in-distribution and carry a much stronger signal, because
+    sensitivity to the gate grows with the variance.
+
+    A checkpoint trained at a FIXED beta_var has no range, so the trained value is the
+    only in-distribution choice.
+    """
+    trained_range = cand.blob.get("beta_var_range")
+    if args.gate_val_beta is not None:
+        chosen = [float(b) for b in args.gate_val_beta]
+        if trained_range is not None:
+            lo, hi = float(trained_range[0]), float(trained_range[1])
+            outside = [b for b in chosen if not lo - 1e-9 <= b <= hi + 1e-9]
+            if outside:
+                raise ValueError(
+                    f"--gate-val-beta {outside} lies outside the TRAINED range "
+                    f"[{lo:g}, {hi:g}]; selecting there would leak the distribution "
+                    f"shift into a procedure that is supposed to be blind to it"
+                )
+        return chosen
+    if trained_range is None:
+        return [float(cand.sim_cfg.beta_var)]
+    lo, hi = float(trained_range[0]), float(trained_range[1])
+    return [lo, 0.5 * (lo + hi), hi]
 
 
 def main() -> None:
@@ -210,21 +254,26 @@ def main() -> None:
             tw_half_width=base.blob["tw_half_width"], seed=args.gate_val_seed,
             device=device,
         )
-        id_beta = args.beta_var[0]
+        val_betas = _selection_betas(args, cand)
         print(f"GATE SELECTION on {args.gate_val_size} held-out instances "
-              f"(seed {args.gate_val_seed}), at the IN-DISTRIBUTION variance "
-              f"beta_var={id_beta} ONLY -- no test or shifted data is consulted")
-        print(f"{'softplus(w)':>12} {'val cost':>10}")
-        print("-" * 23)
+              f"(seed {args.gate_val_seed}), at IN-DISTRIBUTION variance(s) "
+              f"{', '.join(f'{b:g}' for b in val_betas)} -- no test instance and no "
+              f"shifted variance is consulted")
+        cols = "".join(f"{f'val@{b:g}':>10}" for b in val_betas)
+        print(f"{'softplus(w)':>12}{cols}{'mean':>10}")
+        print("-" * (12 + 10 * (len(val_betas) + 1)))
         scores = {}
         for strength in args.gate_sweep:
-            c = float(evaluate(cand, id_beta, instances=val,
-                               strength=strength)["cost"].mean())
-            scores[strength] = c
-            print(f"{strength:>12.4f} {c:>10.4f}")
+            per_beta = [
+                float(evaluate(cand, b, instances=val, strength=strength)["cost"].mean())
+                for b in val_betas
+            ]
+            scores[strength] = sum(per_beta) / len(per_beta)
+            row = "".join(f"{c:>10.4f}" for c in per_beta)
+            print(f"{strength:>12.4f}{row}{scores[strength]:>10.4f}")
         selected = min(scores, key=scores.get)
         print(f"  selected softplus(w) = {selected:g} "
-              f"(val cost {scores[selected]:.4f})\n")
+              f"(mean val cost {scores[selected]:.4f})\n")
 
     base_cost: dict[float, Tensor] = {}
     cand_cost: dict[float, Tensor] = {}
