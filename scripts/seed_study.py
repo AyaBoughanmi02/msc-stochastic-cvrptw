@@ -27,6 +27,9 @@ THREE VIEWS, because they answer different questions:
      wide (t has few degrees of freedom), so consistency of SIGN and magnitude is the
      informative part. Reported as such rather than dressed up as significance.
 
+MATCHED BUDGETS. Every checkpoint must have been trained for the same number of steps, or
+the variant is confounded with the budget; see src/eval/budget.py.
+
 Run from the repo root so `src` is importable.
 """
 
@@ -42,6 +45,7 @@ import torch
 from torch import Tensor
 
 from src.data.cvrptw_generator import generate_cvrptw
+from src.eval.budget import add_budget_argument, assert_matched_budget
 from src.eval.checkpoints import load_stoch_policy
 from scripts.compare_variants import _selection_betas, forced_gate
 from src.eval.evaluate_stoch import evaluate_stoch
@@ -93,6 +97,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gate-val-beta", type=float, nargs="+", default=None,
                    help="variance levels for selection; default = the trained range's "
                         "ends and midpoint (see scripts/compare_variants.py)")
+    add_budget_argument(p)
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -120,6 +125,13 @@ def main() -> None:
 
     baselines = [load_stoch_policy(p, device) for p in args.baseline]
     candidates = [load_stoch_policy(p, device) for p in args.candidate]
+
+    assert_matched_budget(
+        [(path, loaded.blob) for path, loaded
+         in zip([*args.baseline, *args.candidate], [*baselines, *candidates])],
+        allow=args.allow_budget_mismatch,
+    )
+
     ref = baselines[0]
     weight = float(ref.blob["tardiness_weight"])
     for loaded in baselines + candidates:

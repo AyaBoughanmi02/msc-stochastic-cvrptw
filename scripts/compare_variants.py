@@ -28,6 +28,9 @@ sweep: it switches every SED2AM-style gate off at inference, which reduces C's F
 variant B's. A trained C with its gates off is NOT variant B, though: its other weights
 were trained with the gates on and adapted to them, exactly as D's did.
 
+MATCHED BUDGETS. Both checkpoints must have been trained for the same number of steps, or
+the variant is confounded with the budget; see src/eval/budget.py.
+
 Run from the repo root so `src` is importable.
 """
 
@@ -43,6 +46,7 @@ from torch import Tensor
 
 from src.data.cvrptw_generator import generate_cvrptw
 from src.data.simulator import SimulatorConfig
+from src.eval.budget import add_budget_argument, assert_matched_budget
 from src.eval.checkpoints import load_stoch_policy
 from src.eval.evaluate_stoch import evaluate_stoch
 
@@ -89,6 +93,7 @@ def parse_args() -> argparse.Namespace:
                         "stronger signal of the range's upper end. Pass values "
                         "explicitly to override; any value outside the trained range is "
                         "refused, because that would leak the shift into the selection")
+    add_budget_argument(p)
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
     return p.parse_args()
@@ -192,6 +197,11 @@ def main() -> None:
     cand = load_stoch_policy(args.candidate, device)
     augment = not args.no_augment
     scenario_seeds = tuple(range(args.scenarios))
+
+    assert_matched_budget(
+        [(args.baseline, base.blob), (args.candidate, cand.blob)],
+        allow=args.allow_budget_mismatch,
+    )
 
     if base.blob["tardiness_weight"] != cand.blob["tardiness_weight"]:
         raise ValueError(
