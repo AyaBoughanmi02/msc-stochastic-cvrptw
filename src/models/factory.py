@@ -7,6 +7,7 @@ from src.models.pointer_decoder import PointerDecoder
 from src.models.policy import CVRPPolicy
 from src.models.cvrptw_policy import CVRPTWPolicy
 from src.models.cvrptw_gated_policy import DEFAULT_GATE_INIT, CVRPTWGatedPolicy
+from src.models.cvrptw_gateonly_policy import CVRPTWGateOnlyPolicy
 from src.models.cvrptw_sed2am_policy import (
     DEFAULT_SED_GATE_BIAS_INIT,
     CVRPTWSED2AMPolicy,
@@ -230,3 +231,46 @@ def build_cvrptw_gated_policy(
         edge_bias_mode=cfg["edge_bias_mode"],
     )
     return CVRPTWGatedPolicy(encoder, decoder, gate_init=cfg["gate_init"])
+
+# Variant D-prime: variant D with sigma^2 removed from every path except the gate, so the
+# monotone constraint actually binds. The encoder edge feature is mu_bar alone
+# (input_edge_dim 2 -> 1) and the decoder's per-candidate feature is mu alone
+# (edge_feat_dim 2 -> 1); the gate still reads the full variance from the Edge Bank.
+DEFAULT_CVRPTW_GATEONLY_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_GATED_CONFIG,
+    "input_edge_dim": 1,     # encoder: mu_bar only
+    "edge_feat_dim": 1,      # decoder: mu only
+}
+
+
+def build_cvrptw_gateonly_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWGateOnlyPolicy":
+    """Instantiate a CVRPTWGateOnlyPolicy (variant D-prime).
+
+    Same note as variant D: gate_w needs its own optimizer group (higher lr, no weight
+    decay) -- see build_optimizer in src/train/pomo_stoch.py. The gate matters MORE here,
+    since it is now the only route from variance to any decision.
+    """
+    cfg = {**DEFAULT_CVRPTW_GATEONLY_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWGateOnlyPolicy(encoder, decoder, gate_init=cfg["gate_init"])
