@@ -65,6 +65,12 @@ def parse_args() -> argparse.Namespace:
                         "for every training mini-batch. Validation still reports at "
                         "--beta-var, so the numbers stay comparable across runs")
     p.add_argument("--eta", type=float, default=0.6, help="reliability-field strength")
+    p.add_argument("--zeta", type=float, default=0.0,
+                   help="idiosyncratic risk-field strength: how much of sigma^2 is NOT "
+                        "inferable from edge length. 0.0 reproduces the previous model "
+                        "bit-exactly; |eta| + zeta must stay below 1")
+    p.add_argument("--risk-freq", type=int, default=3,
+                   help="spatial frequency of the idiosyncratic risk field (integer)")
     p.add_argument("--field-scale", type=float, default=0.3)
     p.add_argument("--phase-k", type=float, default=1.0, help="spatial congestion lag")
     p.add_argument("--tardiness-weight", type=float, default=2.0,
@@ -114,6 +120,13 @@ def parse_args() -> argparse.Namespace:
                    default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--eval-every", type=int, default=100)
+    p.add_argument("--save-every", type=int, default=0,
+                   help="also keep a PERMANENT checkpoint every N steps, named "
+                        "<out>_step<N>.pt. One long run then yields the whole budget "
+                        "curve (cost and gate strength vs training steps) instead of one "
+                        "endpoint, so 'does the effect depend on the budget?' is answered "
+                        "without retraining at each budget. Rounded up to a multiple of "
+                        "--eval-every, since checkpoints are written at evaluations")
     p.add_argument("--log-every", type=int, default=20)
     p.add_argument("--gate-check-every", type=int, default=200,
                    help="0 disables the gate-chain assertions")
@@ -130,6 +143,7 @@ def main() -> None:
         n_bins=args.n_bins, period=args.shift_end, alpha=args.alpha,
         beta_var=args.beta_var, phase_k=args.phase_k, shift_end=args.shift_end,
         eta=args.eta, field_scale=args.field_scale,
+        zeta=args.zeta, risk_freq=args.risk_freq,
     )
     # Crash-not-silent: a ripple this strong would make far-corner customers unservable,
     # which breaks feasibility-by-construction and would show up as a stalled rollout.
@@ -214,6 +228,11 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     best_val = float("inf")
     last_path = out_path.with_name(out_path.stem + "_last" + out_path.suffix)
+    if args.save_every and args.save_every % args.eval_every != 0:
+        raise ValueError(
+            f"--save-every ({args.save_every}) must be a multiple of --eval-every "
+            f"({args.eval_every}): checkpoints are written at evaluation steps"
+        )
     t0 = time.time()
     if args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
@@ -226,9 +245,11 @@ def main() -> None:
         gate_note += (f" | beta_var randomised over "
                       f"[{args.beta_var_range[0]}, {args.beta_var_range[1]}]")
     print(f"variant {args.variant.upper()}{gate_note}")
-    print(f"stochastic CVRPTW | cap {args.capacity} shift {args.shift_end} "
+    print(f"stochastic CVRPTW | seed {args.seed} | cap {args.capacity} "
+          f"shift {args.shift_end} "
           f"tw_half {args.tw_half_width} | alpha {args.alpha} beta_var {args.beta_var} "
-          f"eta {args.eta} K {args.n_bins} | tardiness_weight {args.tardiness_weight} "
+          f"eta {args.eta} zeta {args.zeta} K {args.n_bins} "
+          f"| tardiness_weight {args.tardiness_weight} "
           f"| reward {args.reward_mode} | effective batch "
           f"{args.batch_size * args.accum_steps}")
 
@@ -293,6 +314,13 @@ def main() -> None:
             # "best val" can select an early checkpoint by luck. A fixed-budget final
             # checkpoint is the selection-free alternative for the seed study.
             torch.save(ckpt, last_path)
+            if args.save_every and step % args.save_every == 0:
+                # A permanent snapshot of THIS budget: never overwritten, so the run can
+                # be re-evaluated later at 5k, 10k, ... as if it had been stopped there.
+                torch.save(
+                    ckpt,
+                    out_path.with_name(f"{out_path.stem}_step{step}{out_path.suffix}"),
+                )
             if id_stats["cost"] < best_val:
                 best_val = id_stats["cost"]
                 torch.save(ckpt, out_path)
