@@ -69,7 +69,7 @@ def main() -> None:
         differing = [
             f
             for f in fields
-            if f not in {"name", "softplus_w", "val_cost", "steps", "sim.beta_var"}
+            if f not in {"name", "variant", "softplus_w", "val_cost", "steps", "sim.beta_var"}
             and len({str(r.get(f)) for r in rows}) > 1
         ]
         print()
