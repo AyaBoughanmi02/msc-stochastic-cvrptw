@@ -103,6 +103,29 @@ class SimulatorConfig:
                  policy that memorised "central edges are risky" mis-generalises while one
                  that penalises the actual sigma^2 stays correctly ordered by construction.
     field_scale: gaussian width of the reliability field, in coordinate units.
+    zeta:        strength of the IDIOSYNCRATIC risk field, 0 <= zeta < 1. 0.0 (the
+                 default) reproduces the previous model bit-exactly. It makes some
+                 corridors unreliable for reasons UNRELATED to their length or their
+                 position relative to the centre:
+
+                     u_i    = 0.5 * (1 + cos(2*pi*f*x_i) * cos(2*pi*f*y_i))   in [0, 1]
+                     s_ij   = 0.5 * (u_i + u_j)                               in [0, 1]
+                     r_ij  += zeta * (2 * s_ij - 1)
+
+                 Motivation (Herrera et al., risk-aware CVRPTW under persistent
+                 disruptions): real unreliability is a property of neighbourhoods and
+                 corridors, not of distance. With zeta = 0 the model's sigma^2 is close to
+                 a deterministic function of mu, so a policy can look risk-aware simply by
+                 avoiding long edges; zeta > 0 removes that shortcut, which is what makes
+                 a variance-specific inductive bias testable. mu is NOT touched, so the
+                 instance calibration and the reachability floor are unchanged.
+
+                 The integer frequency f (`risk_freq`) makes u_i invariant under the 8
+                 dihedral maps of the unit square (cos(2*pi*f*(1-x)) == cos(2*pi*f*x) for
+                 integer f, and the product is symmetric in x and y), so the Edge Bank
+                 stays augmentation-invariant -- the precondition for 8x evaluation.
+    risk_freq:   integer spatial frequency of that field; higher = finer-grained
+                 neighbourhoods. Must be a positive integer (see invariance above).
     """
 
     n_bins: int = 24
@@ -113,6 +136,8 @@ class SimulatorConfig:
     shift_end: float = 4.0
     eta: float = 0.0
     field_scale: float = 0.3
+    zeta: float = 0.0
+    risk_freq: int = 3
 
     def __post_init__(self) -> None:
         if self.n_bins < 1:
@@ -132,6 +157,21 @@ class SimulatorConfig:
             )
         if self.field_scale <= 0.0:
             raise ValueError(f"field_scale must be > 0, got {self.field_scale}")
+        if not 0.0 <= self.zeta < 1.0:
+            raise ValueError(
+                f"zeta must be in [0, 1) to keep the reliability field r > 0, got "
+                f"{self.zeta}"
+            )
+        if abs(self.eta) + self.zeta >= 1.0:
+            raise ValueError(
+                f"|eta| + zeta must stay below 1 so r_ij > 0 without clamping, got "
+                f"|{self.eta}| + {self.zeta}"
+            )
+        if self.risk_freq < 1 or int(self.risk_freq) != self.risk_freq:
+            raise ValueError(
+                f"risk_freq must be a positive INTEGER (dihedral invariance of the "
+                f"idiosyncratic field depends on it), got {self.risk_freq}"
+            )
 
     @property
     def bin_width(self) -> float:
@@ -215,12 +255,22 @@ def build_edge_bank(coords: Tensor, cfg: SimulatorConfig) -> Tensor:
     )                                                                # (B, N, N, K)
     mu = d.unsqueeze(-1) * (1.0 + cfg.alpha * torch.sin(angle))      # (B, N, N, K)
 
-    # sigma^2_ij(tau_k) = beta_var * r_ij * mu^2, r == 1 exactly when eta == 0.
-    if cfg.eta == 0.0:
+    # sigma^2_ij(tau_k) = beta_var * r_ij * mu^2, r == 1 exactly when eta == zeta == 0.
+    if cfg.eta == 0.0 and cfg.zeta == 0.0:
         reliability = torch.ones(1, 1, 1, device=dev, dtype=dtype)   # (1, 1, 1) broadcast
     else:
         g = torch.exp(-radius.square() / (2.0 * cfg.field_scale**2))  # (B, N, N) in (0, 1]
         reliability = 1.0 + cfg.eta * (2.0 * g - 1.0)                 # (B, N, N)
+        if cfg.zeta != 0.0:
+            # Idiosyncratic ("bad neighbourhood") risk: a per-NODE score built from a
+            # dihedral-invariant spatial pattern, averaged over the edge's endpoints. It
+            # is deterministic given the coordinates -- the bank must stay a pure function
+            # of (coords, cfg) -- but it is essentially uncorrelated with edge LENGTH,
+            # which is the whole point.
+            f = 2.0 * math.pi * float(cfg.risk_freq)
+            u = 0.5 * (1.0 + torch.cos(f * coords[..., 0]) * torch.cos(f * coords[..., 1]))
+            s = 0.5 * (u.unsqueeze(2) + u.unsqueeze(1))               # (B, N, N) in [0, 1]
+            reliability = reliability + cfg.zeta * (2.0 * s - 1.0)    # (B, N, N)
     sigma2 = cfg.beta_var * reliability.unsqueeze(-1) * mu.square()   # (B, N, N, K)
 
     return torch.stack([mu, sigma2], dim=-1)                          # (B, N, N, K, 2)
