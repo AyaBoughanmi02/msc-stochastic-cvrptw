@@ -291,7 +291,4 @@ class EGATEncoder(nn.Module):
             batch = h.new_zeros(h.size(0), dtype=torch.long)  # single graph
         global_emb = global_mean_pool(h, batch)    # (num_graphs, hidden)
         return h, global_emb
-        if batch is None:
-            batch = h.new_zeros(h.size(0), dtype=torch.long)  # single graph
-        global_emb = global_mean_pool(h, batch)    # (num_graphs, hidden)
-        return h, global_emb
+        
