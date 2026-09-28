@@ -12,6 +12,9 @@ the wrong architecture (load_state_dict(strict=True) would refuse anyway).
 D and D-prime both carry `gate_w`, so they are separated by the WIDTH of the decoder's
 per-candidate edge map: D reads (mu, sigma^2) and has a 1x2 `w_edge`; D-prime reads mu
 alone and has a 1x1 one, because its only path from variance to a decision is the gate.
+
+M0 (true mean-only) carries no gate at all and has D-prime's 1x1 `w_edge`, so a checkpoint
+with no gate parameter and a 1-wide decoder edge map is M0; with a 2-wide one it is B.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from src.data.simulator import SimulatorConfig
 from src.models.factory import (
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
+    build_cvrptw_meanonly_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
@@ -38,7 +42,7 @@ class LoadedPolicy(NamedTuple):
     policy: torch.nn.Module
     sim_cfg: SimulatorConfig      # the simulator it was trained under
     blob: dict                    # the raw checkpoint (instance dials, val stats, ...)
-    variant: str                  # 'B', 'C', 'D' or "D'", inferred from the weights
+    variant: str                  # 'B', 'C', 'D', "D'" or 'M0', inferred from the weights
 
 
 def _decoder_edge_width(state: dict, model_config: dict) -> int:
@@ -70,7 +74,8 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
     state = blob["model_state"]
     # Variant is inferred from the WEIGHTS: D and D-prime carry the single scalar `gate_w`
     # (and differ in how wide the decoder's edge map is), C carries the SED2AM-style gate
-    # parameters, B carries neither.
+    # parameters, M0 carries no gate and a mu-only decoder, B carries neither gate and
+    # reads both moments.
     if GATE_PARAM_NAME in state:
         if _decoder_edge_width(state, blob["model_config"]) == 1:
             variant, builder = "D'", build_cvrptw_gateonly_policy
@@ -78,6 +83,9 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
             variant, builder = "D", build_cvrptw_gated_policy
     elif any(SED_GATE_TAG in k for k in state):
         variant, builder = "C", build_cvrptw_sed2am_policy
+    elif _decoder_edge_width(state, blob["model_config"]) == 1:
+        # No gate, no SED gate, and a mu-only decoder: variant M0 (true mean-only).
+        variant, builder = "M0", build_cvrptw_meanonly_policy
     else:
         variant, builder = "B", build_cvrptw_stoch_policy
     policy = builder(blob["model_config"]).to(device)

@@ -1,4 +1,4 @@
-"""Train a stochastic CVRPTW policy (variant B, C, D or D-prime) with POMO.
+"""Train a stochastic CVRPTW policy (variant B, C, D, D-prime or M0) with POMO.
 
 Example:
     python scripts/train_stoch.py --n-customers 20 --steps 800 --beta-var 0.3 \
@@ -37,10 +37,12 @@ from src.models.cvrptw_sed2am_policy import DEFAULT_SED_GATE_BIAS_INIT
 from src.models.factory import (
     DEFAULT_CVRPTW_GATED_CONFIG,
     DEFAULT_CVRPTW_GATEONLY_CONFIG,
+    DEFAULT_CVRPTW_MEANONLY_CONFIG,
     DEFAULT_CVRPTW_SED2AM_CONFIG,
     DEFAULT_CVRPTW_STOCH_CONFIG,
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
+    build_cvrptw_meanonly_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
@@ -102,13 +104,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # variant
     p.add_argument("--variant", type=str, default="b",
-                   choices=["b", "c", "d", "dprime"],
+                   choices=["b", "c", "d", "dprime", "m0"],
                    help="b = (mu, sigma^2) edge features, no gate; "
                         "c = b plus a SED2AM-style learned sigmoid gate (the competitor); "
                         "d = b plus the shared monotone variance gate; "
                         "dprime = d with sigma^2 REMOVED from the encoder edge feature and "
                         "from the decoder's w_edge, so the gate is the only path from "
-                        "variance to a decision and the monotone constraint actually binds")
+                        "variance to a decision and the monotone constraint actually binds; "
+                        "m0 = TRUE mean-only: dprime's architecture with NO gate, so "
+                        "sigma^2 influences neither training nor decisions")
     p.add_argument("--gate-init", type=float, default=0.0,
                    help="variants D/D-prime: initial w; softplus(0)=0.693 starts D as ~B")
     p.add_argument("--gate-lr", type=float, default=1e-2,
@@ -178,6 +182,9 @@ def main() -> None:
         model_config = {**DEFAULT_CVRPTW_SED2AM_CONFIG,
                         "sed_gate_bias_init": args.sed_gate_bias_init}
         policy = build_cvrptw_sed2am_policy(model_config).to(device)
+    elif args.variant == "m0":
+        model_config = {**DEFAULT_CVRPTW_MEANONLY_CONFIG}
+        policy = build_cvrptw_meanonly_policy(model_config).to(device)
     else:
         model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
         policy = build_cvrptw_stoch_policy(model_config).to(device)
@@ -266,6 +273,8 @@ def main() -> None:
                      f"gate_lr {args.gate_lr:.0e}")
     elif args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
+    elif args.variant == "m0":
+        gate_note = " | MEAN-ONLY: no gate, sigma^2 reaches no decision"
     elif args.variant == "c":
         gate_note = (f" | SED2AM-style gate, bias_init {args.sed_gate_bias_init} "
                      f"gate_lr {args.gate_lr:.0e}")
