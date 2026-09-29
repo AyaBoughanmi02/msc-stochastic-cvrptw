@@ -62,13 +62,18 @@ def parse_args() -> argparse.Namespace:
                    help="one checkpoint per training seed")
     p.add_argument("--candidate", type=str, nargs="+", required=True)
     p.add_argument("--shift-param", type=str, default="beta_var",
-                   choices=["beta_var", "eta", "field_scale", "alpha", "zeta"],
+                   choices=["beta_var", "eta", "field_scale", "alpha", "zeta", "risk_freq",
+                            "omega"],
                    help="which simulator parameter to shift. 'beta_var' is a MAGNITUDE "
                         "shift (everything gets uniformly riskier, the risk RANKING is "
                         "unchanged). 'eta' is a STRUCTURAL shift: flipping its sign "
                         "inverts WHICH corridors are unreliable while keeping the amount "
                         "of heterogeneity identical. 'zeta' shifts how much risk is "
-                        "idiosyncratic, i.e. NOT inferable from edge length")
+                        "idiosyncratic, i.e. NOT inferable from edge length. 'risk_freq' "
+                        "(integer) moves WHICH neighbourhoods are risky at unchanged "
+                        "magnitude -- a structural shift of the dominant component at "
+                        "omega=1. 'omega' changes the risk COMPOSITION (evaluation only: "
+                        "every arm must still be TRAINED at one omega)")
     p.add_argument("--shift-values", type=float, nargs="+", default=None,
                    help="values of --shift-param to evaluate; the FIRST must be the "
                         "trained value, since it is treated as in-distribution")
@@ -122,6 +127,13 @@ def main() -> None:
 
     param = args.shift_param
     values = args.shift_values if args.shift_values is not None else args.beta_var
+    if param == "risk_freq":
+        # argparse parses every value as a float; the simulator needs a positive INTEGER
+        # (dihedral invariance of the risk field). Refuse 3.5 rather than truncating it.
+        bad = [v for v in values if v != int(v) or v < 1]
+        if bad:
+            raise ValueError(f"--shift-values for risk_freq must be positive integers, got {bad}")
+        values = [int(v) for v in values]
 
     baselines = [load_stoch_policy(p, device) for p in args.baseline]
     candidates = [load_stoch_policy(p, device) for p in args.candidate]
@@ -210,7 +222,8 @@ def main() -> None:
 
     print(f"baseline  ({baselines[0].variant}): {len(baselines)} seeds")
     print(f"candidate ({candidates[0].variant}): {len(candidates)} seeds")
-    kind = "structural" if param in ("eta", "field_scale") else "magnitude"
+    kind = ("structural" if param in ("eta", "field_scale", "risk_freq")
+            else "composition" if param == "omega" else "magnitude")
     print(f"  shifting {param} over {values}  ({kind} shift; trained at {trained})")
     note = (f" | candidate gate CALIBRATED per seed on held-out data"
             if selected else "")

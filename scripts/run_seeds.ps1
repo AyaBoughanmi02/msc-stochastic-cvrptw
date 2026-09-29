@@ -14,11 +14,8 @@
 $common = @("--omega", "1", "--beta-var-range", "0.15", "0.6", "--steps", "15000")
 
 $runs = @(
-    @{ variant = "m0"; seed = 2024; name = "M0_w1_15k_s2024" },
-    @{ variant = "m0"; seed = 7;    name = "M0_w1_15k_s7"    },
-    @{ variant = "m0"; seed = 1234; name = "M0_w1_15k_s1234" },
-    @{ variant = "b";  seed = 7;    name = "B_w1_15k_s7"     },
-    @{ variant = "b";  seed = 1234; name = "B_w1_15k_s1234"  }
+    @{ variant = "dprime"; seed = 7;    name = "Dp_w1_15k_s7"    },
+    @{ variant = "dprime"; seed = 1234; name = "Dp_w1_15k_s1234" }
 )
 
 New-Item -ItemType Directory -Force runs | Out-Null
