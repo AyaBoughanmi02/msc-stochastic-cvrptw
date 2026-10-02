@@ -15,6 +15,9 @@ alone and has a 1x1 one, because its only path from variance to a decision is th
 
 M0 (true mean-only) carries no gate at all and has D-prime's 1x1 `w_edge`, so a checkpoint
 with no gate parameter and a 1-wide decoder edge map is M0; with a 2-wide one it is B.
+
+Gate CONTROLS (shuffled / constant / distance gate) share D-prime's weights exactly;
+they are told apart by model_config["gate_signal"] and labelled "D'-<signal>".
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ import torch
 
 from src.data.simulator import SimulatorConfig
 from src.models.factory import (
+    build_cvrptw_gate_control_policy,
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
     build_cvrptw_meanonly_policy,
@@ -78,7 +82,11 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
     # reads both moments.
     if GATE_PARAM_NAME in state:
         if _decoder_edge_width(state, blob["model_config"]) == 1:
-            variant, builder = "D'", build_cvrptw_gateonly_policy
+            signal = blob["model_config"].get("gate_signal", "sigma2")
+            if signal == "sigma2":
+                variant, builder = "D'", build_cvrptw_gateonly_policy
+            else:
+                variant, builder = f"D'-{signal}", build_cvrptw_gate_control_policy
         else:
             variant, builder = "D", build_cvrptw_gated_policy
     elif any(SED_GATE_TAG in k for k in state):

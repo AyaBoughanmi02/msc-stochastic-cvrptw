@@ -9,6 +9,7 @@ from src.models.cvrptw_policy import CVRPTWPolicy
 from src.models.cvrptw_gated_policy import DEFAULT_GATE_INIT, CVRPTWGatedPolicy
 from src.models.cvrptw_gateonly_policy import CVRPTWGateOnlyPolicy
 from src.models.cvrptw_meanonly_policy import CVRPTWMeanOnlyPolicy
+from src.models.cvrptw_gate_controls import CVRPTWGateControlPolicy
 from src.models.cvrptw_sed2am_policy import (
     DEFAULT_SED_GATE_BIAS_INIT,
     CVRPTWSED2AMPolicy,
@@ -312,3 +313,43 @@ def build_cvrptw_meanonly_policy(
         edge_bias_mode=cfg["edge_bias_mode"],
     )
     return CVRPTWMeanOnlyPolicy(encoder, decoder)
+
+
+# Gate controls: D-prime whose gate penalises a CONTROL signal (shuffled sigma^2, a
+# constant, or rescaled mu^2) instead of the true variance. Same architecture and state
+# dict as D-prime; the signal is recorded in model_config["gate_signal"] so the checkpoint
+# loader can rebuild the right class. See src/models/cvrptw_gate_controls.py.
+DEFAULT_CVRPTW_GATE_CONTROL_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_GATEONLY_CONFIG,
+    "gate_signal": "shuffle",
+}
+
+
+def build_cvrptw_gate_control_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWGateControlPolicy":
+    """Instantiate a CVRPTWGateControlPolicy (a D-prime mechanism control)."""
+    cfg = {**DEFAULT_CVRPTW_GATE_CONTROL_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWGateControlPolicy(
+        encoder, decoder, gate_init=cfg["gate_init"], gate_signal=cfg["gate_signal"]
+    )

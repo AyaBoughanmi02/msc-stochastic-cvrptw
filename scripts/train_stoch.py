@@ -40,13 +40,16 @@ from src.models.factory import (
     DEFAULT_CVRPTW_MEANONLY_CONFIG,
     DEFAULT_CVRPTW_SED2AM_CONFIG,
     DEFAULT_CVRPTW_STOCH_CONFIG,
+    build_cvrptw_gate_control_policy,
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
     build_cvrptw_meanonly_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
+from src.models.cvrptw_gate_controls import GATE_SIGNALS, softplus_inverse
 from src.models.gate_checks import assert_gate_chain_inert
+from src.train.gate_schedule import GATE_SCHEDULES, gate_scale
 from src.train.pomo_stoch import build_optimizer, train_step_stoch
 
 
@@ -120,6 +123,22 @@ def parse_args() -> argparse.Namespace:
                         "At the global 3e-4 the gate could not travel far enough for the "
                         "experiment to be informative in either direction. The SAME value "
                         "is used for every variant, so none is handicapped")
+    # mechanism tests for the TRAINING-TIME gate (variant D-prime only; see
+    # src/models/cvrptw_gate_controls.py and src/train/gate_schedule.py)
+    p.add_argument("--gate-signal", type=str, default="sigma2", choices=list(GATE_SIGNALS),
+                   help="D-prime only: what the gate penalises. sigma2 = the true variance "
+                        "(plain D-prime); shuffle / const / dist = magnitude-matched "
+                        "controls. The environment always uses the true variance")
+    p.add_argument("--gate-schedule", type=str, default="constant",
+                   choices=list(GATE_SCHEDULES),
+                   help="D-prime only: when the gate is active. early = on until "
+                        "--gate-off-frac of the steps, then off; anneal = linearly to 0 "
+                        "at --gate-off-frac, then off")
+    p.add_argument("--gate-off-frac", type=float, default=None,
+                   help="fraction of the steps at which an early/anneal gate reaches 0")
+    p.add_argument("--gate-fixed", type=float, default=None,
+                   help="D-prime only: FREEZE the gate at this lambda = softplus(w) for "
+                        "the whole run (dose-response). Exact: w gets no gradient")
     p.add_argument("--sed-gate-bias-init", type=float, default=DEFAULT_SED_GATE_BIAS_INIT,
                    help="variant C: initial gate bias; sigmoid(2.0)=0.881 starts C as ~B")
     # evaluation
@@ -172,9 +191,22 @@ def main() -> None:
             f"the instance calibration"
         )
 
+    gate_mods = (args.gate_signal != "sigma2" or args.gate_schedule != "constant"
+                 or args.gate_fixed is not None)
+    if gate_mods and args.variant != "dprime":
+        raise ValueError("--gate-signal / --gate-schedule / --gate-fixed apply to "
+                         "--variant dprime only")
     if args.variant == "dprime":
-        model_config = {**DEFAULT_CVRPTW_GATEONLY_CONFIG, "gate_init": args.gate_init}
-        policy = build_cvrptw_gateonly_policy(model_config).to(device)
+        gate_init = (softplus_inverse(args.gate_fixed) if args.gate_fixed is not None
+                     else args.gate_init)
+        model_config = {**DEFAULT_CVRPTW_GATEONLY_CONFIG, "gate_init": gate_init}
+        if args.gate_signal != "sigma2":
+            model_config["gate_signal"] = args.gate_signal
+            policy = build_cvrptw_gate_control_policy(model_config).to(device)
+        else:
+            policy = build_cvrptw_gateonly_policy(model_config).to(device)
+        if args.gate_fixed is not None:
+            policy.gate_w.requires_grad_(False)     # exactly frozen: no gradient, no drift
     elif args.variant == "d":
         model_config = {**DEFAULT_CVRPTW_GATED_CONFIG, "gate_init": args.gate_init}
         policy = build_cvrptw_gated_policy(model_config).to(device)
@@ -199,6 +231,18 @@ def main() -> None:
         )
 
     train_gen = torch.Generator(device=device).manual_seed(args.seed)
+
+    # Gate schedule: scale softplus(w) per step. Validated up front so a bad flag cannot
+    # kill a night run at the first step.
+    gate_scale_now = [1.0]
+    if args.gate_schedule != "constant":
+        gate_scale(1, args.steps, args.gate_schedule, args.gate_off_frac)   # validates
+        _raw_strength = policy.gate_strength
+
+        def _scheduled_strength() -> torch.Tensor:
+            return _raw_strength() * gate_scale_now[0]
+
+        policy.gate_strength = _scheduled_strength
 
     # The gate chain asserts that each stacked term is inert when switched off, and its
     # links were written against B/C/D, whose decoder reads BOTH moments. D-prime's
@@ -269,8 +313,12 @@ def main() -> None:
         )
     t0 = time.time()
     if args.variant == "dprime":
-        gate_note = (f" | gate-ONLY variance path | gate_init {args.gate_init} "
-                     f"gate_lr {args.gate_lr:.0e}")
+        gate_note = (f" | gate-ONLY variance path | gate_init {gate_init:.4f} "
+                     f"gate_lr {args.gate_lr:.0e} | gate signal {args.gate_signal} "
+                     f"| schedule {args.gate_schedule}"
+                     + (f" (off at {args.gate_off_frac:g})" if args.gate_off_frac else "")
+                     + (f" | FIXED lambda {args.gate_fixed:g}"
+                        if args.gate_fixed is not None else ""))
     elif args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
     elif args.variant == "m0":
@@ -293,6 +341,8 @@ def main() -> None:
           f"{args.batch_size * args.accum_steps}")
 
     for step in range(1, args.steps + 1):
+        gate_scale_now[0] = gate_scale(step, args.steps, args.gate_schedule,
+                                       args.gate_off_frac)
         metrics = train_step_stoch(
             policy, optimizer, sample_batch, train_sim_cfg,
             accum_steps=args.accum_steps, n_starts=args.n_starts,
@@ -314,6 +364,8 @@ def main() -> None:
                 if k not in ("loss", "mean_cost", "mean_distance", "mean_tardiness",
                              "mean_violations", "late_rate", "grad_norm")
             )
+            if args.gate_schedule != "constant":
+                extra += f" | gate_scale {gate_scale_now[0]:.3f}"
             print(f"step {step:5d}/{args.steps} | loss {metrics['loss']:+.4f} "
                   f"| cost {metrics['mean_cost']:.4f} "
                   f"| dist {metrics['mean_distance']:.4f} "
@@ -343,6 +395,10 @@ def main() -> None:
                     "reward_mode": args.reward_mode, "variant": args.variant,
                     "beta_var_range": args.beta_var_range,
                     "gate_lr": args.gate_lr,
+                    "gate_signal": args.gate_signal,
+                    "gate_schedule": args.gate_schedule,
+                    "gate_off_frac": args.gate_off_frac,
+                    "gate_fixed": args.gate_fixed,
                     "policy_metrics": (policy.policy_metrics()
                                        if hasattr(policy, "policy_metrics") else {}),
                     "val_scenario_seeds": scenario_seeds,
