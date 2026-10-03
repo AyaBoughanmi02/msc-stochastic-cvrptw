@@ -102,6 +102,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gate-val-beta", type=float, nargs="+", default=None,
                    help="variance levels for selection; default = the trained range's "
                         "ends and midpoint (see scripts/compare_variants.py)")
+    p.add_argument("--baseline-gate", type=float, default=None,
+                   help="force the BASELINE's gate strength to this value in every "
+                        "evaluation, e.g. 0 to compare M (= D' at lambda 0) against a "
+                        "training-time gate control at lambda 0. Every baseline "
+                        "checkpoint must have a gate")
     add_budget_argument(p)
     p.add_argument("--device", type=str,
                    default="cuda" if torch.cuda.is_available() else "cpu")
@@ -220,6 +225,12 @@ def main() -> None:
                   f"{scores[selected[idx]]:>10.4f}")
         print()
 
+    if args.baseline_gate is not None:
+        no_gate = [path for path, b in zip(args.baseline, baselines)
+                   if not hasattr(b.policy, "gate_w")]
+        if no_gate:
+            raise ValueError(f"--baseline-gate needs gated baselines; {no_gate} have no gate")
+        print(f"baseline gate FORCED to {args.baseline_gate:g} in every evaluation")
     print(f"baseline  ({baselines[0].variant}): {len(baselines)} seeds")
     print(f"candidate ({candidates[0].variant}): {len(candidates)} seeds")
     kind = ("structural" if param in ("eta", "field_scale", "risk_freq")
@@ -257,6 +268,9 @@ def main() -> None:
 
                 if group == "cand" and seed_idx in selected:
                     with forced_gate(loaded.policy, selected[seed_idx]):
+                        per_seed.append(run())
+                elif group == "base" and args.baseline_gate is not None:
+                    with forced_gate(loaded.policy, args.baseline_gate):
                         per_seed.append(run())
                 else:
                     per_seed.append(run())
