@@ -1,4 +1,4 @@
-"""Train a stochastic CVRPTW policy (variant B, C, D, D-prime or M0) with POMO.
+"""Train a stochastic CVRPTW policy (variant B, C, D, D-prime, M0 or VGT-R) with POMO.
 
 Example:
     python scripts/train_stoch.py --n-customers 20 --steps 800 --beta-var 0.3 \
@@ -38,12 +38,14 @@ from src.models.factory import (
     DEFAULT_CVRPTW_GATED_CONFIG,
     DEFAULT_CVRPTW_GATEONLY_CONFIG,
     DEFAULT_CVRPTW_MEANONLY_CONFIG,
+    DEFAULT_CVRPTW_RISKBIAS_CONFIG,
     DEFAULT_CVRPTW_SED2AM_CONFIG,
     DEFAULT_CVRPTW_STOCH_CONFIG,
     build_cvrptw_gate_control_policy,
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
     build_cvrptw_meanonly_policy,
+    build_cvrptw_riskbias_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
@@ -107,7 +109,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # variant
     p.add_argument("--variant", type=str, default="b",
-                   choices=["b", "c", "d", "dprime", "m0"],
+                   choices=["b", "c", "d", "dprime", "m0", "vgtr"],
                    help="b = (mu, sigma^2) edge features, no gate; "
                         "c = b plus a SED2AM-style learned sigmoid gate (the competitor); "
                         "d = b plus the shared monotone variance gate; "
@@ -115,7 +117,17 @@ def parse_args() -> argparse.Namespace:
                         "from the decoder's w_edge, so the gate is the only path from "
                         "variance to a decision and the monotone constraint actually binds; "
                         "m0 = TRUE mean-only: dprime's architecture with NO gate, so "
-                        "sigma^2 influences neither training nor decisions")
+                        "sigma^2 influences neither training nor decisions; "
+                        "vgtr = dprime plus a learnable lateness-risk bias "
+                        "-alpha * P(late at j) in the decoder, kept at evaluation")
+    p.add_argument("--risk-init", type=float, default=None,
+                   help="variant vgtr: initial risk_w; default softplus^-1(1) so the "
+                        "risk-bias strength alpha starts at 1")
+    p.add_argument("--risk-signal", type=str, default="sigma2",
+                   choices=["sigma2", "const", "shuffle"],
+                   help="variant vgtr: variance used to build P(late). sigma2 = the true "
+                        "variance; const / shuffle = controls (see "
+                        "src/models/cvrptw_riskbias_policy.py)")
     p.add_argument("--gate-init", type=float, default=0.0,
                    help="variants D/D-prime: initial w; softplus(0)=0.693 starts D as ~B")
     p.add_argument("--gate-lr", type=float, default=1e-2,
@@ -193,6 +205,8 @@ def main() -> None:
 
     gate_mods = (args.gate_signal != "sigma2" or args.gate_schedule != "constant"
                  or args.gate_fixed is not None)
+    if args.risk_signal != "sigma2" and args.variant != "vgtr":
+        raise ValueError("--risk-signal applies to --variant vgtr only")
     if gate_mods and args.variant != "dprime":
         raise ValueError("--gate-signal / --gate-schedule / --gate-fixed apply to "
                          "--variant dprime only")
@@ -214,6 +228,12 @@ def main() -> None:
         model_config = {**DEFAULT_CVRPTW_SED2AM_CONFIG,
                         "sed_gate_bias_init": args.sed_gate_bias_init}
         policy = build_cvrptw_sed2am_policy(model_config).to(device)
+    elif args.variant == "vgtr":
+        model_config = {**DEFAULT_CVRPTW_RISKBIAS_CONFIG, "gate_init": args.gate_init}
+        if args.risk_init is not None:
+            model_config["risk_init"] = args.risk_init
+        model_config["risk_signal"] = args.risk_signal
+        policy = build_cvrptw_riskbias_policy(model_config).to(device)
     elif args.variant == "m0":
         model_config = {**DEFAULT_CVRPTW_MEANONLY_CONFIG}
         policy = build_cvrptw_meanonly_policy(model_config).to(device)
@@ -250,7 +270,7 @@ def main() -> None:
     # than silently passing a weaker check -- and skipped HERE, before the run starts,
     # so a stale assertion cannot kill a training job at step 200.
     gate_check_every = args.gate_check_every
-    if args.variant == "dprime" and gate_check_every:
+    if args.variant in ("dprime", "vgtr") and gate_check_every:
         print("  note: gate-chain checks skipped for variant D-prime (the w_edge link "
               "assumes a 2-dim decoder edge map); extend gate_checks.py to restore them")
         gate_check_every = 0
@@ -321,6 +341,11 @@ def main() -> None:
                         if args.gate_fixed is not None else ""))
     elif args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
+    elif args.variant == "vgtr":
+        gate_note = (f" | VGT + lateness-risk bias | gate_init {args.gate_init} "
+                     f"risk_init {model_config['risk_init']:.4f} (alpha "
+                     f"{float(policy.risk_strength().detach()):.3f}) "
+                     f"gate_lr {args.gate_lr:.0e} | risk signal {args.risk_signal}")
     elif args.variant == "m0":
         gate_note = " | MEAN-ONLY: no gate, sigma^2 reaches no decision"
     elif args.variant == "c":
@@ -399,6 +424,7 @@ def main() -> None:
                     "gate_schedule": args.gate_schedule,
                     "gate_off_frac": args.gate_off_frac,
                     "gate_fixed": args.gate_fixed,
+                    "risk_signal": args.risk_signal,
                     "policy_metrics": (policy.policy_metrics()
                                        if hasattr(policy, "policy_metrics") else {}),
                     "val_scenario_seeds": scenario_seeds,

@@ -18,6 +18,8 @@ with no gate parameter and a 1-wide decoder edge map is M0; with a 2-wide one it
 
 Gate CONTROLS (shuffled / constant / distance gate) share D-prime's weights exactly;
 they are told apart by model_config["gate_signal"] and labelled "D'-<signal>".
+
+VGT-R carries `risk_w` (the lateness-risk bias strength) on top of D-prime's weights.
 """
 
 from __future__ import annotations
@@ -32,9 +34,11 @@ from src.models.factory import (
     build_cvrptw_gated_policy,
     build_cvrptw_gateonly_policy,
     build_cvrptw_meanonly_policy,
+    build_cvrptw_riskbias_policy,
     build_cvrptw_sed2am_policy,
     build_cvrptw_stoch_policy,
 )
+from src.models.cvrptw_riskbias_policy import RISK_PARAM_NAME
 from src.train.pomo_stoch import GATE_PARAM_NAME, SED_GATE_TAG
 
 _REQUIRED = ("model_state", "model_config", "sim_config", "tardiness_weight")
@@ -80,7 +84,12 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
     # (and differ in how wide the decoder's edge map is), C carries the SED2AM-style gate
     # parameters, M0 carries no gate and a mu-only decoder, B carries neither gate and
     # reads both moments.
-    if GATE_PARAM_NAME in state:
+    if RISK_PARAM_NAME in state:
+        # VGT-R carries BOTH gate_w and risk_w, so it must be tested before D-prime.
+        signal = blob["model_config"].get("risk_signal", "sigma2")
+        variant = "VGT-R" if signal == "sigma2" else f"VGT-R-{signal}"
+        builder = build_cvrptw_riskbias_policy
+    elif GATE_PARAM_NAME in state:
         if _decoder_edge_width(state, blob["model_config"]) == 1:
             signal = blob["model_config"].get("gate_signal", "sigma2")
             if signal == "sigma2":

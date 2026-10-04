@@ -10,6 +10,7 @@ from src.models.cvrptw_gated_policy import DEFAULT_GATE_INIT, CVRPTWGatedPolicy
 from src.models.cvrptw_gateonly_policy import CVRPTWGateOnlyPolicy
 from src.models.cvrptw_meanonly_policy import CVRPTWMeanOnlyPolicy
 from src.models.cvrptw_gate_controls import CVRPTWGateControlPolicy
+from src.models.cvrptw_riskbias_policy import DEFAULT_RISK_INIT, CVRPTWRiskBiasPolicy
 from src.models.cvrptw_sed2am_policy import (
     DEFAULT_SED_GATE_BIAS_INIT,
     CVRPTWSED2AMPolicy,
@@ -352,4 +353,45 @@ def build_cvrptw_gate_control_policy(
     )
     return CVRPTWGateControlPolicy(
         encoder, decoder, gate_init=cfg["gate_init"], gate_signal=cfg["gate_signal"]
+    )
+
+# Variant VGT-R: VGT (D-prime) plus a learnable non-negative lateness-risk bias in the
+# decoder, -alpha * P(late at j). Same encoder/decoder shapes as D-prime; the only new
+# parameter is the scalar `risk_w` (alpha = softplus(risk_w)), which must sit in the gate
+# optimizer group. See src/models/cvrptw_riskbias_policy.py.
+DEFAULT_CVRPTW_RISKBIAS_CONFIG: dict[str, Any] = {
+    **DEFAULT_CVRPTW_GATEONLY_CONFIG,
+    "risk_init": DEFAULT_RISK_INIT,   # softplus^-1(1.0): alpha starts at 1, as in ICAM
+    "risk_signal": "sigma2",          # or a control: "const" / "shuffle"
+}
+
+
+def build_cvrptw_riskbias_policy(
+    config: dict[str, Any] | None = None,
+) -> "CVRPTWRiskBiasPolicy":
+    """Instantiate a CVRPTWRiskBiasPolicy (variant VGT-R)."""
+    cfg = {**DEFAULT_CVRPTW_RISKBIAS_CONFIG, **(config or {})}
+    encoder = EGATEncoder(
+        input_node_dim=cfg["input_node_dim"],
+        input_edge_dim=cfg["input_edge_dim"],
+        hidden_dim=cfg["hidden_dim"],
+        hidden_edge_dim=cfg["hidden_edge_dim"],
+        n_layers=cfg["n_layers"],
+        n_heads=cfg["n_heads"],
+        negative_slope=cfg["negative_slope"],
+        norm=cfg["norm"],
+        attn=cfg["attn"],
+        sigmoid_gate=cfg["sigmoid_gate"],
+    )
+    decoder = PointerDecoder(
+        hidden_dim=cfg["hidden_dim"],
+        n_heads=cfg["n_heads"],
+        tanh_clip=cfg["tanh_clip"],
+        context_extra_dim=cfg["context_extra_dim"],
+        edge_feat_dim=cfg["edge_feat_dim"],
+        edge_bias_mode=cfg["edge_bias_mode"],
+    )
+    return CVRPTWRiskBiasPolicy(
+        encoder, decoder, gate_init=cfg["gate_init"], risk_init=cfg["risk_init"],
+        risk_signal=cfg["risk_signal"],
     )

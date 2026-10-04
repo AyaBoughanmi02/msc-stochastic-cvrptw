@@ -47,7 +47,11 @@ from torch import Tensor
 from src.data.cvrptw_generator import generate_cvrptw
 from src.eval.budget import add_budget_argument, assert_matched_budget
 from src.eval.checkpoints import load_stoch_policy
+from contextlib import nullcontext
+from itertools import product
+
 from scripts.compare_variants import _selection_betas, forced_gate
+from scripts.risk_components import forced_risk
 from src.eval.evaluate_stoch import evaluate_stoch
 
 # Two-sided 95% t critical values by degrees of freedom, for small seed counts.
@@ -102,6 +106,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gate-val-beta", type=float, nargs="+", default=None,
                    help="variance levels for selection; default = the trained range's "
                         "ends and midpoint (see scripts/compare_variants.py)")
+    p.add_argument("--risk-sweep", type=float, nargs="+", default=None,
+                   help="VGT-R candidates only: risk-bias strengths alpha to choose from, "
+                        "JOINTLY with --gate-sweep, per seed, on the held-out selection "
+                        "instances (requires --select-gate-on-val). Never chosen on test")
     p.add_argument("--baseline-gate", type=float, default=None,
                    help="force the BASELINE's gate strength to this value in every "
                         "evaluation, e.g. 0 to compare M (= D' at lambda 0) against a "
@@ -179,7 +187,7 @@ def main() -> None:
     )
 
     # ---------------------------------------- per-seed gate calibration (variant D only)
-    selected: dict[int, float] = {}
+    selected: dict[int, tuple[float, float | None]] = {}   # seed -> (lambda, alpha or None)
     if args.select_gate_on_val:
         if args.gate_sweep is None:
             raise ValueError("--select-gate-on-val requires --gate-sweep")
@@ -194,6 +202,11 @@ def main() -> None:
                 f"--select-gate-on-val needs variant-D candidates; checkpoint(s) "
                 f"{[args.candidate[i] for i in missing]} have no gate scalar"
             )
+        if args.risk_sweep is not None:
+            no_risk = [args.candidate[i] for i, c in enumerate(candidates)
+                       if not hasattr(c.policy, "risk_w")]
+            if no_risk:
+                raise ValueError(f"--risk-sweep needs VGT-R candidates; {no_risk} have none")
         val = generate_cvrptw(
             args.gate_val_size, ref.blob["n_customers"], ref.blob["capacity"],
             service_time=ref.blob["service_time"], shift_end=ref.blob["shift_end"],
@@ -202,13 +215,16 @@ def main() -> None:
         )
         print(f"GATE CALIBRATION per seed on {args.gate_val_size} held-out instances "
               f"(seed {args.gate_val_seed}), at in-distribution variance(s) only")
-        print(f"{'seed':>6} {'learned':>9} {'selected':>9} {'val cost':>10}")
-        print("-" * 36)
+        print(f"{'seed':>6} {'learned':>9} {'selected':>9} {'alpha':>9} {'val cost':>10}")
+        print("-" * 46)
+        risk_grid = args.risk_sweep if args.risk_sweep is not None else [None]
         for idx, loaded in enumerate(candidates):
             betas = _selection_betas(args, loaded)
             scores = {}
-            for strength in args.gate_sweep:
-                with forced_gate(loaded.policy, strength):
+            for strength, alpha in product(args.gate_sweep, risk_grid):
+                risk_ctx = (forced_risk(loaded.policy, alpha) if alpha is not None
+                            else nullcontext())
+                with forced_gate(loaded.policy, strength), risk_ctx:
                     per_beta = [
                         float(evaluate_stoch(
                             loaded.policy, val, replace(loaded.sim_cfg, beta_var=b),
@@ -218,10 +234,12 @@ def main() -> None:
                         )["cost"].mean())
                         for b in betas
                     ]
-                scores[strength] = sum(per_beta) / len(per_beta)
+                scores[(strength, alpha)] = sum(per_beta) / len(per_beta)
             selected[idx] = min(scores, key=scores.get)
             learned = float(loaded.policy.gate_strength().detach())
-            print(f"{idx + 1:>6} {learned:>9.4f} {selected[idx]:>9.4g} "
+            sel_gate, sel_alpha = selected[idx]
+            alpha_txt = "learned" if sel_alpha is None else f"{sel_alpha:g}"
+            print(f"{idx + 1:>6} {learned:>9.4f} {sel_gate:>9.4g} {alpha_txt:>9} "
                   f"{scores[selected[idx]]:>10.4f}")
         print()
 
@@ -267,7 +285,10 @@ def main() -> None:
                     )["cost"]
 
                 if group == "cand" and seed_idx in selected:
-                    with forced_gate(loaded.policy, selected[seed_idx]):
+                    sel_gate, sel_alpha = selected[seed_idx]
+                    risk_ctx = (forced_risk(loaded.policy, sel_alpha)
+                                if sel_alpha is not None else nullcontext())
+                    with forced_gate(loaded.policy, sel_gate), risk_ctx:
                         per_seed.append(run())
                 elif group == "base" and args.baseline_gate is not None:
                     with forced_gate(loaded.policy, args.baseline_gate):

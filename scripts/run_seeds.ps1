@@ -7,24 +7,20 @@
 # No $ErrorActionPreference = "Stop": under Windows PowerShell 5.1, anything Python
 # writes to stderr (including harmless warnings) would then abort the whole set.
 #
-# CURRENT SET: Stage 5, wave 1 -- what about sigma^2 teaches the policy?
-#   DpShuf  : gate penalises the instance's sigma^2 SHUFFLED among its roads
-#   DpConst : gate penalises the instance's MEAN sigma^2 on every road
-#   DpSnap  : plain D' (true sigma^2), retrained with snapshots -> learning curve of M
-# --save-every 2500 keeps <name>_step2500.pt ... so every run also gives a learning curve.
-# Interleaved by seed: if stopped early, each control still has the same seeds done.
+# CURRENT SET: Stage 5, wave 3 -- is VGT-R's training benefit variance INFORMATION?
+#   VGTRc : VGT-R whose P(late) is built from the instance's MEAN sigma^2 on every road
+#           (keeps slack, the day's variance level and its accumulation; removes WHICH
+#           roads are riskier). Evaluated like VGT-R: lambda 0, alpha chosen on held-out
+#           data. Compared against VGTR_w1_15k_s* (same seeds, same budget).
+# Interleaved by seed so a stopped set still leaves complete seeds.
 
 $common = @("--omega", "1", "--beta-var-range", "0.15", "0.6", "--steps", "15000",
             "--save-every", "2500")
 
 $runs = @(
-    @{ variant = "dprime"; seed = 2024; name = "DpShuf_w1_15k_s2024";  extra = @("--gate-signal", "shuffle") },
-    @{ variant = "dprime"; seed = 2024; name = "DpConst_w1_15k_s2024"; extra = @("--gate-signal", "const") },
-    @{ variant = "dprime"; seed = 7;    name = "DpShuf_w1_15k_s7";     extra = @("--gate-signal", "shuffle") },
-    @{ variant = "dprime"; seed = 7;    name = "DpConst_w1_15k_s7";    extra = @("--gate-signal", "const") },
-    @{ variant = "dprime"; seed = 1234; name = "DpShuf_w1_15k_s1234";  extra = @("--gate-signal", "shuffle") },
-    @{ variant = "dprime"; seed = 1234; name = "DpConst_w1_15k_s1234"; extra = @("--gate-signal", "const") },
-    @{ variant = "dprime"; seed = 2024; name = "DpSnap_w1_15k_s2024";  extra = @() }
+    @{ variant = "vgtr"; seed = 2024; name = "VGTRc_w1_15k_s2024"; extra = @("--risk-signal", "const") },
+    @{ variant = "vgtr"; seed = 7;    name = "VGTRc_w1_15k_s7";    extra = @("--risk-signal", "const") },
+    @{ variant = "vgtr"; seed = 1234; name = "VGTRc_w1_15k_s1234"; extra = @("--risk-signal", "const") }
 )
 
 New-Item -ItemType Directory -Force runs | Out-Null
