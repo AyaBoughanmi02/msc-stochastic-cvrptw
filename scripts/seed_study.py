@@ -110,6 +110,10 @@ def parse_args() -> argparse.Namespace:
                    help="VGT-R candidates only: risk-bias strengths alpha to choose from, "
                         "JOINTLY with --gate-sweep, per seed, on the held-out selection "
                         "instances (requires --select-gate-on-val). Never chosen on test")
+    p.add_argument("--baseline-risk", type=float, default=None,
+                   help="force the BASELINE's risk-bias strength alpha (VGT-R baselines "
+                        "only), e.g. 0 to compare two VGT-R variants both deployed without "
+                        "the bias")
     p.add_argument("--baseline-gate", type=float, default=None,
                    help="force the BASELINE's gate strength to this value in every "
                         "evaluation, e.g. 0 to compare M (= D' at lambda 0) against a "
@@ -249,6 +253,12 @@ def main() -> None:
         if no_gate:
             raise ValueError(f"--baseline-gate needs gated baselines; {no_gate} have no gate")
         print(f"baseline gate FORCED to {args.baseline_gate:g} in every evaluation")
+    if args.baseline_risk is not None:
+        no_risk = [path for path, b in zip(args.baseline, baselines)
+                   if not hasattr(b.policy, "risk_w")]
+        if no_risk:
+            raise ValueError(f"--baseline-risk needs VGT-R baselines; {no_risk} have none")
+        print(f"baseline risk-bias alpha FORCED to {args.baseline_risk:g} in every evaluation")
     print(f"baseline  ({baselines[0].variant}): {len(baselines)} seeds")
     print(f"candidate ({candidates[0].variant}): {len(candidates)} seeds")
     kind = ("structural" if param in ("eta", "field_scale", "risk_freq")
@@ -290,8 +300,13 @@ def main() -> None:
                                 if sel_alpha is not None else nullcontext())
                     with forced_gate(loaded.policy, sel_gate), risk_ctx:
                         per_seed.append(run())
-                elif group == "base" and args.baseline_gate is not None:
-                    with forced_gate(loaded.policy, args.baseline_gate):
+                elif group == "base" and (args.baseline_gate is not None
+                                          or args.baseline_risk is not None):
+                    gate_ctx = (forced_gate(loaded.policy, args.baseline_gate)
+                                if args.baseline_gate is not None else nullcontext())
+                    risk_ctx = (forced_risk(loaded.policy, args.baseline_risk)
+                                if args.baseline_risk is not None else nullcontext())
+                    with gate_ctx, risk_ctx:
                         per_seed.append(run())
                 else:
                     per_seed.append(run())
