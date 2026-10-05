@@ -60,6 +60,10 @@ same bias can be built from a control instead of the true sigma^2, everything el
            LEVEL and its accumulation along the route; removes WHICH roads are riskier
   shuffle  the instance's sigma^2 values permuted across roads (symmetric, as for the gate
            controls): keeps the level, scrambles the pattern
+  fixed    "slack-only": like const, but rescaled to ONE reference variance level
+           (beta_var = FIXED_BETA_REF) whatever the day's actual level. Keeps deadline
+           slack and a fixed uncertainty width; removes the day's variance level too.
+           If it matches const, the benefit is deadline-aware training, not uncertainty.
 
 For a control, the variance accumulated since the last depot visit is tracked from the
 CONTROL signal (track_accumulated_variance), so the true variance cannot leak in through
@@ -82,7 +86,11 @@ from src.models.pointer_decoder import PointerDecoder
 
 RISK_PARAM_NAME = "risk_w"                     # must match src/train/pomo_stoch.py
 DEFAULT_RISK_INIT = softplus_inverse(1.0)      # alpha = 1 at init, as ICAM's alpha
-RISK_SIGNALS = ("sigma2", "const", "shuffle")  # "sigma2" = VGT-R proper
+RISK_SIGNALS = ("sigma2", "const", "shuffle", "fixed")  # "sigma2" = VGT-R proper
+# "fixed": the instance's mean sigma^2 rescaled to this reference variance level, so the
+# uncertainty width no longer depends on the day. Midpoint of the training range
+# beta_var ~ U[0.15, 0.6].
+FIXED_BETA_REF = 0.375
 
 
 def lateness_probability(
@@ -170,7 +178,15 @@ class CVRPTWRiskBiasPolicy(CVRPTWGateOnlyPolicy):
         cache = getattr(env, "_risk_control_cache", None)
         if cache is not None and cache[0] is env.bank and cache[1] == self.risk_signal:
             return cache[2]
-        signal = gate_signal_tensor(env.bank, self.risk_signal, self._risk_gen)
+        if self.risk_signal == "fixed":
+            beta = float(env.sim_cfg.beta_var)
+            if beta <= 0.0:
+                raise ValueError("the 'fixed' control needs beta_var > 0 to rescale")
+            # sigma^2 is proportional to beta_var, so const * (ref / beta) is independent
+            # of the day's level: the same uncertainty width on every day.
+            signal = gate_signal_tensor(env.bank, "const") * (FIXED_BETA_REF / beta)
+        else:
+            signal = gate_signal_tensor(env.bank, self.risk_signal, self._risk_gen)
         rbank = torch.stack([env.bank[..., MU], signal], dim=-1)     # (B, N, N, K, 2)
         env._risk_control_cache = (env.bank, self.risk_signal, rbank)
         return rbank

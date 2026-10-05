@@ -124,9 +124,9 @@ def parse_args() -> argparse.Namespace:
                    help="variant vgtr: initial risk_w; default softplus^-1(1) so the "
                         "risk-bias strength alpha starts at 1")
     p.add_argument("--risk-signal", type=str, default="sigma2",
-                   choices=["sigma2", "const", "shuffle"],
+                   choices=["sigma2", "const", "shuffle", "fixed"],
                    help="variant vgtr: variance used to build P(late). sigma2 = the true "
-                        "variance; const / shuffle = controls (see "
+                        "variance; const / shuffle / fixed = controls (see "
                         "src/models/cvrptw_riskbias_policy.py)")
     p.add_argument("--gate-init", type=float, default=0.0,
                    help="variants D/D-prime: initial w; softplus(0)=0.693 starts D as ~B")

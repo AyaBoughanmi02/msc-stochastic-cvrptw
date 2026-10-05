@@ -284,3 +284,20 @@ def test_old_vgtr_checkpoints_without_risk_signal_still_load_as_sigma2(tmp_path)
     loaded = load_stoch_policy(str(path))
     assert loaded.variant == "VGT-R"
     assert loaded.policy.risk_signal == "sigma2"
+
+
+def test_fixed_control_does_not_depend_on_the_days_variance_level() -> None:
+    """Same instances, two variance levels: the 'fixed' risk bank must be identical."""
+    torch.manual_seed(0)
+    policy = build_cvrptw_riskbias_policy({"risk_signal": "fixed"}).eval()
+    data = _data(seed=14)
+    banks = []
+    for beta in (0.2, 0.6):
+        env = build_stoch_env(data, _cfg(beta_var=beta), 1, 2.0, reward_mode="analytic")
+        env.reset()
+        banks.append(policy._risk_bank(env)[..., 1])                   # control variance
+    torch.testing.assert_close(banks[0], banks[1], rtol=1e-5, atol=1e-7)
+    const = build_cvrptw_riskbias_policy({"risk_signal": "const"}).eval()
+    env = build_stoch_env(data, _cfg(beta_var=0.6), 1, 2.0, reward_mode="analytic")
+    env.reset()
+    assert not torch.allclose(const._risk_bank(env)[..., 1], banks[1])   # const does

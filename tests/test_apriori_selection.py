@@ -4,7 +4,8 @@ Load-bearing claims:
   - the 'hindsight' rule reproduces evaluate_stoch exactly (same days, same selection);
   - an a-priori rule can never beat hindsight on the realised cost (hindsight is the
     minimum over the same candidates);
-  - all rules report the components of the SAME selected trajectory (cost identity).
+  - all rules report the components of the SAME selected trajectory (cost identity);
+  - SAA selection days can never be the test days.
 """
 
 from __future__ import annotations
@@ -43,10 +44,21 @@ def test_hindsight_reproduces_evaluate_stoch() -> None:
 def test_no_apriori_rule_beats_hindsight_and_costs_add_up() -> None:
     policy, data, cfg = _setup()
     out = evaluate_stoch_apriori(policy, data, cfg, tardiness_weight=_W, augment=False,
-                                 scenario_seeds=(0, 1, 2))
-    for rule in ("expected", "planned_distance"):
+                                 scenario_seeds=(0, 1, 2), n_selection_days=3)
+    for rule in ("expected", "planned_distance", "saa", "average"):
         assert bool((out[rule]["cost"] >= out["hindsight"]["cost"] - 1e-5).all())
     for rule in RULES:
         rebuilt = out[rule]["distance"] + _W * (out[rule]["late_count"]
                                                 + out[rule]["tardiness"])
         torch.testing.assert_close(out[rule]["cost"], rebuilt, rtol=1e-5, atol=1e-5)
+
+
+def test_selection_days_never_overlap_test_days() -> None:
+    import pytest
+
+    from src.eval.apriori_selection import SELECTION_SEED_OFFSET
+
+    policy, data, cfg = _setup()
+    with pytest.raises(ValueError, match="overlap"):
+        evaluate_stoch_apriori(policy, data, cfg, tardiness_weight=_W, augment=False,
+                               scenario_seeds=(SELECTION_SEED_OFFSET,), n_selection_days=2)
