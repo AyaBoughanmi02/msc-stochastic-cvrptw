@@ -92,7 +92,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--tardiness-weight", type=float, default=2.0,
                    help="reward penalty per violation; calibrate with the sweep first")
     p.add_argument("--reward-mode", type=str, default="analytic",
-                   choices=["analytic", "sampled"],
+                   choices=["analytic", "sampled", "hybrid"],
                    help="analytic = expected tardiness in closed form (learnable); "
                         "sampled = one realised day (measured to be unlearnable under POMO)")
     p.add_argument("--no-crn", action="store_true",
@@ -179,6 +179,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gate-check-every", type=int, default=200,
                    help="0 disables the gate-chain assertions")
     p.add_argument("--out", type=str, default="checkpoints/cvrptwB_best.pt")
+    p.add_argument("--init-from", type=str, default=None,
+                   help="fine-tune: load this checkpoint's weights before training. Must be "
+                        "the same variant, simulator and tardiness_weight. Its step count is "
+                        "added to the recorded budget, so matched-budget checks stay valid")
     return p.parse_args()
 
 
@@ -240,6 +244,25 @@ def main() -> None:
     else:
         model_config = {**DEFAULT_CVRPTW_STOCH_CONFIG}
         policy = build_cvrptw_stoch_policy(model_config).to(device)
+
+    init_steps = 0
+    if args.init_from is not None:
+        # weights_only=False: our own checkpoint dicts hold configs, not just tensors.
+        blob = torch.load(args.init_from, map_location=device, weights_only=False)
+        if blob.get("variant") != args.variant:
+            raise ValueError(f"--init-from is variant {blob.get('variant')!r}, "
+                             f"but --variant is {args.variant!r}")
+        if float(blob["tardiness_weight"]) != args.tardiness_weight:
+            raise ValueError("--init-from was trained with a different tardiness_weight")
+        old_sim, new_sim = blob["sim_config"], asdict(sim_cfg)
+        changed = sorted(k for k in new_sim if k != "beta_var" and old_sim.get(k) != new_sim[k])
+        if changed:
+            raise ValueError(f"--init-from used a different simulator: {changed}")
+        policy.load_state_dict(blob["model_state"])          # strict: same architecture
+        init_steps = int(blob["step"])
+        print(f"initialised from {args.init_from} | variant {args.variant} | "
+              f"{init_steps} steps | its reward {blob.get('reward_mode')}")
+
     # The gate scalar gets its own group (higher lr, no weight decay); see build_optimizer.
     optimizer = build_optimizer(
         policy, lr=args.lr, weight_decay=args.weight_decay, gate_lr=args.gate_lr
@@ -430,7 +453,9 @@ def main() -> None:
                     "val_scenario_seeds": scenario_seeds,
                     "val_augment": args.val_augment,
                     "val_stats": id_stats, "ood_stats": ood_stats,
-                    "val_cost": id_stats["cost"], "step": step}
+                                        "val_cost": id_stats["cost"], "step": init_steps + step,
+                    "init_from": args.init_from, "init_steps": init_steps,
+                    "finetune_steps": step}
             # Always keep the LATEST weights too: with a noisy 256-instance validation,
             # "best val" can select an early checkpoint by luck. A fixed-budget final
             # checkpoint is the selection-free alternative for the seed study.

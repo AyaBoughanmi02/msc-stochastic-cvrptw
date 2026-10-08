@@ -53,6 +53,7 @@ import torch
 from torch import Tensor
 
 from src.data.simulator import (
+    _MU_EPS,
     MU,
     SIGMA2,
     SimulatorConfig,
@@ -79,6 +80,38 @@ def _std_normal_cdf(z: Tensor) -> Tensor:
     return 0.5 * (1.0 + torch.erf(z * (0.5 ** 0.5)))
 
 
+def _lognormal_lateness(mu: Tensor, sigma2: Tensor, slack: Tensor) -> tuple[Tensor, Tensor]:
+    """E[(X - slack)^+] and P(X > slack) for X lognormal with mean mu, variance sigma2.
+
+    mu, sigma2, slack: (M,) each. slack = latest - departure clock (may be <= 0).
+    Uses the moment-matched parameters of `apply_noise`, so it is the exact expectation of
+    what reward_mode='sampled' would charge for this arc:
+        s^2 = log1p(sigma2 / mu^2),  m = log(mu) - s^2 / 2
+        E[(X - K)^+] = mu * Phi(d1) - K * Phi(d2),  P(X > K) = Phi(d2)
+        d1 = (m - log K + s^2) / s,  d2 = d1 - s           (K > 0)
+    K <= 0: lateness is certain, E = mu - K, P = 1. sigma2 == 0 (or mu == 0, the idle
+    self-loop): deterministic, E = relu(mu - K), P = 1[mu > K].
+    """
+    mu_safe = mu.clamp_min(_MU_EPS)
+    s2 = torch.log1p(sigma2.clamp_min(0.0) / mu_safe.square())            # (M,)
+    s = s2.sqrt()
+    k_pos = slack.clamp_min(_MU_EPS)
+    m = mu_safe.log() - 0.5 * s2
+    s_safe = s.clamp_min(_VAR_EPS)
+    d1 = (m - k_pos.log() + s2) / s_safe
+    d2 = d1 - s_safe
+    exp_pos = mu * _std_normal_cdf(d1) - slack * _std_normal_cdf(d2)      # K > 0, s > 0
+    p_pos = _std_normal_cdf(d2)
+
+    degenerate = (s <= _VAR_EPS) | (mu <= _MU_EPS)
+    exp_det = (mu - slack).clamp_min(0.0)
+    p_det = (mu > slack).to(mu.dtype)
+    certain = slack <= 0.0
+    exp_late = torch.where(degenerate, exp_det, torch.where(certain, mu - slack, exp_pos))
+    p_late = torch.where(degenerate, p_det, torch.where(certain, torch.ones_like(mu), p_pos))
+    return exp_late.clamp_min(0.0), p_late
+
+
 class CVRPTWStochEnv(CVRPTWEnv):
     """CVRPTW state machine with stochastic, time-dependent travel times."""
 
@@ -101,9 +134,9 @@ class CVRPTWStochEnv(CVRPTWEnv):
         b, n, _ = coords.shape
         dev = coords.device
 
-        if reward_mode not in ("sampled", "analytic"):
+        if reward_mode not in ("sampled", "analytic", "hybrid"):
             raise ValueError(
-                f"unknown reward_mode {reward_mode!r}; use 'sampled' or 'analytic'"
+                f"unknown reward_mode {reward_mode!r}; use 'sampled' or 'analytic' or 'hybrid'"
             )
 
         if bank.dim() != 5 or bank.size(-1) != 2:
@@ -217,7 +250,9 @@ class CVRPTWStochEnv(CVRPTWEnv):
             self.bank, self.current_node, action, bin_idx, self.instance_idx
         )                                                        # (B*S, 2)
         mu, sigma2 = moments[:, MU], moments[:, SIGMA2]          # (B*S,) each
-        self._arc_var = sigma2                                   # for the analytic charge
+        self._arc_var = sigma2          # for the analytic charge
+        self._arc_mu = mu  # for the hybrid charge
+
         if self.reward_mode == "analytic":
             # The clock advances on the MEAN, so the route is a deterministic function of
             # the actions. Uncertainty is priced in _on_arrival instead of rolled for.
@@ -262,8 +297,20 @@ class CVRPTWStochEnv(CVRPTWEnv):
             self.time_var = var
             return
 
-        late = (arrival - latest).clamp_min(0.0)                 # (B*S,)
+        if self.reward_mode == "hybrid":
+            # The clock is REAL (sampled), but this arc is charged its EXPECTED lateness
+            # given the departure clock, in closed form for the lognormal travel time.
+            # Same expectation as 'sampled' (unbiased), without this arc's noise.
+            exp_late, p_late = _lognormal_lateness(
+                self._arc_mu, self._arc_var, latest - self.time
+            )  # (B*S,) each
+            self.tardiness = self.tardiness + exp_late
+            self.late_count = self.late_count + p_late
+            return
+
+        late = (arrival - latest).clamp_min(0.0)  # (B*S,)
         self.tardiness = self.tardiness + late
+
         self.late_count = self.late_count + (late > _TW_EPS).to(self.tardiness.dtype)
 
     def step(self, action: Tensor) -> tuple[Tensor, Tensor]:
