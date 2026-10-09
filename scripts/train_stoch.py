@@ -50,6 +50,7 @@ from src.models.factory import (
     build_cvrptw_stoch_policy,
 )
 from src.models.cvrptw_gate_controls import GATE_SIGNALS, softplus_inverse
+from src.models.gate_location import GATE_LOCATIONS, restrict_gate
 from src.models.gate_checks import assert_gate_chain_inert
 from src.train.gate_schedule import GATE_SCHEDULES, gate_scale
 from src.train.pomo_stoch import build_optimizer, train_step_stoch
@@ -151,6 +152,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gate-fixed", type=float, default=None,
                    help="D-prime only: FREEZE the gate at this lambda = softplus(w) for "
                         "the whole run (dose-response). Exact: w gets no gradient")
+    p.add_argument("--gate-location", type=str, default="both", choices=list(GATE_LOCATIONS),
+                   help="D-prime only: where the gate acts. both = encoder and decoder "
+                        "(plain D-prime); encoder / decoder = the other path switched off. "
+                        "See src/models/gate_location.py")
     p.add_argument("--sed-gate-bias-init", type=float, default=DEFAULT_SED_GATE_BIAS_INIT,
                    help="variant C: initial gate bias; sigmoid(2.0)=0.881 starts C as ~B")
     # evaluation
@@ -208,12 +213,12 @@ def main() -> None:
         )
 
     gate_mods = (args.gate_signal != "sigma2" or args.gate_schedule != "constant"
-                 or args.gate_fixed is not None)
+                 or args.gate_fixed is not None or args.gate_location != "both")
     if args.risk_signal != "sigma2" and args.variant != "vgtr":
         raise ValueError("--risk-signal applies to --variant vgtr only")
     if gate_mods and args.variant != "dprime":
-        raise ValueError("--gate-signal / --gate-schedule / --gate-fixed apply to "
-                         "--variant dprime only")
+        raise ValueError("--gate-signal / --gate-schedule / --gate-fixed / --gate-location "
+                         "apply to --variant dprime only")
     if args.variant == "dprime":
         gate_init = (softplus_inverse(args.gate_fixed) if args.gate_fixed is not None
                      else args.gate_init)
@@ -225,6 +230,9 @@ def main() -> None:
             policy = build_cvrptw_gateonly_policy(model_config).to(device)
         if args.gate_fixed is not None:
             policy.gate_w.requires_grad_(False)     # exactly frozen: no gradient, no drift
+        if args.gate_location != "both":
+            model_config["gate_location"] = args.gate_location   # loader re-applies it
+            restrict_gate(policy, args.gate_location)
     elif args.variant == "d":
         model_config = {**DEFAULT_CVRPTW_GATED_CONFIG, "gate_init": args.gate_init}
         policy = build_cvrptw_gated_policy(model_config).to(device)
@@ -361,7 +369,9 @@ def main() -> None:
                      f"| schedule {args.gate_schedule}"
                      + (f" (off at {args.gate_off_frac:g})" if args.gate_off_frac else "")
                      + (f" | FIXED lambda {args.gate_fixed:g}"
-                        if args.gate_fixed is not None else ""))
+                        if args.gate_fixed is not None else "")
+                     + (f" | gate in the {args.gate_location.upper()} only"
+                        if args.gate_location != "both" else ""))
     elif args.variant == "d":
         gate_note = f" | gate_init {args.gate_init} gate_lr {args.gate_lr:.0e}"
     elif args.variant == "vgtr":
@@ -444,6 +454,7 @@ def main() -> None:
                     "beta_var_range": args.beta_var_range,
                     "gate_lr": args.gate_lr,
                     "gate_signal": args.gate_signal,
+                    "gate_location": args.gate_location,
                     "gate_schedule": args.gate_schedule,
                     "gate_off_frac": args.gate_off_frac,
                     "gate_fixed": args.gate_fixed,

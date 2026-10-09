@@ -39,6 +39,7 @@ from src.models.factory import (
     build_cvrptw_stoch_policy,
 )
 from src.models.cvrptw_riskbias_policy import RISK_PARAM_NAME
+from src.models.gate_location import restrict_gate
 from src.train.pomo_stoch import GATE_PARAM_NAME, SED_GATE_TAG
 
 _REQUIRED = ("model_state", "model_config", "sim_config", "tardiness_weight")
@@ -107,5 +108,11 @@ def load_stoch_policy(path: str, device: torch.device | str = "cpu") -> LoadedPo
         variant, builder = "B", build_cvrptw_stoch_policy
     policy = builder(blob["model_config"]).to(device)
     policy.load_state_dict(state, strict=True)
+    location = blob["model_config"].get("gate_location", "both")
+    if location != "both":
+        # Re-apply WHERE the gate acted in training. Without this, forcing lambda > 0 on
+        # the loaded policy would switch on a gate path the checkpoint never trained with.
+        restrict_gate(policy, location)
+        variant = f"{variant}[{location}]"
     policy.eval()
     return LoadedPolicy(policy, SimulatorConfig(**blob["sim_config"]), blob, variant)
