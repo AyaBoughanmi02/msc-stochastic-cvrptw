@@ -108,6 +108,7 @@ def _resolve_n_starts(data: CVRPTWData, n_starts: int | None) -> int:
 
 GATE_PARAM_NAME = "gate_w"          # variant D: the single monotone-gate scalar
 SED_GATE_TAG = "sed_gate"           # variant C: the SED2AM-style gate parameters
+RISK_PARAM_NAME = "risk_w"          # variant VGT-R: lateness-risk bias strength
 
 
 def is_gate_param(name: str) -> bool:
@@ -117,7 +118,7 @@ def is_gate_param(name: str) -> bool:
     settings: a gate that cannot travel under the global lr produces a null result that
     says nothing about gating.
     """
-    return name == GATE_PARAM_NAME or SED_GATE_TAG in name
+    return name in (GATE_PARAM_NAME, RISK_PARAM_NAME) or SED_GATE_TAG in name
 
 
 def build_optimizer(
