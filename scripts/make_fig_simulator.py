@@ -122,7 +122,7 @@ def main() -> None:
     coords = data.coords.double()                                       # (B, N, 2)
     d = pairwise_distances(coords)                                      # (B, N, N)
 
-    banks = {w: build_edge_bank(coords, replace(cfg, omega=w)) for w in (0.0, 1.0)}
+    banks = {w: build_edge_bank(coords, replace(cfg, omega=w)) for w in (0.0, 0.5, 1.0)}
     avg = {w: horizon_average(b) for w, b in banks.items()}             # (B, N, N, 2)
 
     # Check of (3.16): the day-average of the mean equals the distance.
@@ -136,7 +136,7 @@ def main() -> None:
     print(f"omega = 1: max over roads of (max_k - min_k) sigma^2 = {spread:.2e}\n")
 
     mu_bar = upper_pairs(avg[0.0][..., MU])
-    corr = {w: pearson(mu_bar, upper_pairs(avg[w][..., SIGMA2])) for w in (0.0, 1.0)}
+    corr = {w: pearson(mu_bar, upper_pairs(avg[w][..., SIGMA2])) for w in (0.0, 0.5, 1.0)}
     n_roads = mu_bar.numel()
     print("CORRELATION corr(mu_bar, sigma_bar^2): Pearson, pooled over all roads i < j "
           f"(depot included) of {args.instances} instances (seed {args.seed}) = "
