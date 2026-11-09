@@ -1,17 +1,4 @@
-"""Table C.1 (Appendix C): the closed forms of the training rewards against Monte Carlo.
-
-Inference only, CPU, a few seconds. For each row it compares
-  * lognormal travel time X (hybrid reward, eq. 3.42): the code's `_lognormal_lateness`
-    (the function the hybrid reward calls) with a Monte-Carlo estimate built from the
-    code's `apply_noise` (the function the simulator uses to draw travel times);
-  * normal arrival time A (analytic reward, eq. 3.40): the closed form of
-    `CVRPTWStochEnv._on_arrival` (analytic branch), written out here, with a Monte-Carlo
-    estimate from normal draws,
-for E[(X - K)^+] and P(X > K). Every printed number is a source for Table C.1.
-
-Example (PowerShell, repo root, .venv active):
-    python -u -m scripts.check_closed_forms 2>&1 | Tee-Object -FilePath runs\\check_closed_forms.log
-"""
+#Table C.1 (Appendix C): the closed forms of the training rewards against Monte Carlo.
 
 from __future__ import annotations
 
