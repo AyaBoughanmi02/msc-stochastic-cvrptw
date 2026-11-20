@@ -53,6 +53,7 @@ from src.models.cvrptw_gate_controls import GATE_SIGNALS, softplus_inverse
 from src.models.gate_location import GATE_LOCATIONS, restrict_gate
 from src.models.gate_checks import assert_gate_chain_inert
 from src.train.gate_schedule import GATE_SCHEDULES, gate_scale
+from src.train.day_replication import replicate_days
 from src.train.pomo_stoch import build_optimizer, train_step_stoch
 
 
@@ -98,6 +99,12 @@ def parse_args() -> argparse.Namespace:
                         "sampled = one realised day (measured to be unlearnable under POMO)")
     p.add_argument("--no-crn", action="store_true",
                    help="draw fresh noise per traversal instead of one day per instance")
+    p.add_argument("--days-per-instance", type=int, default=1,
+                   help="E1 (equal-compute day averaging): fill each mini-batch with "
+                        "batch_size / K distinct instances, each repeated on K independent "
+                        "days. Every (instance, day) row keeps its own POMO group and shared "
+                        "baseline, so the rollouts per step are unchanged. 1 = the usual "
+                        "batch, bit-identical to before")
     # optimisation (certified recipe)
     p.add_argument("--steps", type=int, default=800)
     p.add_argument("--batch-size", type=int, default=32)
@@ -212,6 +219,21 @@ def main() -> None:
             f"the instance calibration"
         )
 
+    # E1: K days per instance at equal compute. Validated before anything is built so a
+    # bad flag cannot fail after the checkpoint has been loaded.
+    k_days = args.days_per_instance
+    if k_days < 1 or args.batch_size % k_days != 0:
+        raise ValueError(f"--days-per-instance must be >= 1 and divide --batch-size "
+                         f"({args.batch_size}), got {k_days}")
+    if k_days > 1 and args.reward_mode == "analytic":
+        raise ValueError("--days-per-instance > 1 is meaningless with the analytic reward "
+                         "(it draws no day)")
+    if k_days > 1 and args.no_crn:
+        raise ValueError("--days-per-instance > 1 needs common random numbers: without "
+                         "them each traversal draws fresh noise and a 'day' is undefined")
+    if k_days > 1 and args.accum_steps != 1:
+        raise ValueError("--days-per-instance > 1 was written for --accum-steps 1")
+
     gate_mods = (args.gate_signal != "sigma2" or args.gate_schedule != "constant"
                  or args.gate_fixed is not None or args.gate_location != "both")
     if args.risk_signal != "sigma2" and args.variant != "vgtr":
@@ -320,11 +342,14 @@ def main() -> None:
             return replace(sim_cfg, beta_var=beta)
 
     def sample_batch():
-        return generate_cvrptw(
-            args.batch_size, args.n_customers, args.capacity,
+        # E1: B/K distinct instances, each repeated K times (K=1: the usual batch, same RNG
+        # consumption, so old runs are reproduced). See src/train/day_replication.py.
+        base = generate_cvrptw(
+            args.batch_size // k_days, args.n_customers, args.capacity,
             service_time=args.service_time, shift_end=args.shift_end,
             tw_half_width=args.tw_half_width, device=device,
         )
+        return replicate_days(base, k_days)
 
     val = generate_cvrptw(
         args.val_size, args.n_customers, args.capacity,
@@ -386,6 +411,9 @@ def main() -> None:
                      f"gate_lr {args.gate_lr:.0e}")
     else:
         gate_note = ""
+    if k_days > 1:
+        gate_note += (f" | E1: {args.batch_size // k_days} instances x {k_days} days "
+                      f"per mini-batch")
     if args.beta_var_range is not None:
         gate_note += (f" | beta_var randomised over "
                       f"[{args.beta_var_range[0]}, {args.beta_var_range[1]}]")
@@ -459,6 +487,7 @@ def main() -> None:
                     "gate_off_frac": args.gate_off_frac,
                     "gate_fixed": args.gate_fixed,
                     "risk_signal": args.risk_signal,
+                    "days_per_instance": k_days,
                     "policy_metrics": (policy.policy_metrics()
                                        if hasattr(policy, "policy_metrics") else {}),
                     "val_scenario_seeds": scenario_seeds,
