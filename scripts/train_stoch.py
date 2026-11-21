@@ -54,6 +54,7 @@ from src.models.gate_location import GATE_LOCATIONS, restrict_gate
 from src.models.gate_checks import assert_gate_chain_inert
 from src.train.gate_schedule import GATE_SCHEDULES, gate_scale
 from src.train.day_replication import replicate_days
+from src.train.lr_schedule import build_scheduler
 from src.train.pomo_stoch import build_optimizer, train_step_stoch
 
 
@@ -113,6 +114,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight-decay", type=float, default=1e-6)
     p.add_argument("--lr-schedule", type=str, default="cosine", choices=["none", "cosine"])
     p.add_argument("--min-lr", type=float, default=1e-6)
+    p.add_argument("--warmup-steps", type=int, default=0,
+                   help="linear lr warm-up over the first N steps, multiplying the cosine "
+                        "(0 = the original schedule, bit-exact). See src/train/lr_schedule.py")
     p.add_argument("--grad-clip", type=float, default=None)
     p.add_argument("--n-starts", type=int, default=None, help="None = all customers")
     # variant
@@ -297,11 +301,8 @@ def main() -> None:
     optimizer = build_optimizer(
         policy, lr=args.lr, weight_decay=args.weight_decay, gate_lr=args.gate_lr
     )
-    scheduler = None
-    if args.lr_schedule == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=args.steps, eta_min=args.min_lr
-        )
+    scheduler = build_scheduler(optimizer, args.lr_schedule, args.steps, args.min_lr,
+                                args.warmup_steps)
 
     train_gen = torch.Generator(device=device).manual_seed(args.seed)
 
@@ -488,6 +489,7 @@ def main() -> None:
                     "gate_fixed": args.gate_fixed,
                     "risk_signal": args.risk_signal,
                     "days_per_instance": k_days,
+                    "warmup_steps": args.warmup_steps,
                     "policy_metrics": (policy.policy_metrics()
                                        if hasattr(policy, "policy_metrics") else {}),
                     "val_scenario_seeds": scenario_seeds,
