@@ -64,6 +64,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--risk-alpha", type=float, default=None)
     p.add_argument("--test-size", type=int, default=256)
     p.add_argument("--test-seed", type=int, default=4242)
+    p.add_argument("--n-customers", type=int, default=None,
+                   help="test-instance size; default: the checkpoint's (zero-shot if different)")
+    p.add_argument("--capacity", type=int, default=None,
+                   help="vehicle capacity; default: the checkpoint's")
     p.add_argument("--scenarios", type=int, default=4, help="test days (seeds 0..D-1)")
     p.add_argument("--select-days", type=int, default=64,
                    help="selection days collected (seeds 10000+k); K values must be <= this")
@@ -77,6 +81,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--self-check", type=int, default=16,
                    help="instances re-run through evaluate_stoch_apriori (0 = skip)")
     p.add_argument("--no-save-raw", action="store_true")
+    p.add_argument("--no-log-file", action="store_true",
+                   help="do not write <out>.log (use when piping to Tee-Object instead)")
     p.add_argument("--out", type=str, default="runs/selection")
     add_budget_argument(p)
     p.add_argument("--device", type=str,
@@ -121,7 +127,8 @@ def main() -> None:
     if max(args.ks) > args.select_days or args.k_subset > args.select_days:
         raise ValueError("every K must be <= --select-days")
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    _tee_console(Path(f"{args.out}.log"))
+    if not args.no_log_file:
+        _tee_console(Path(f"{args.out}.log"))
     print("command:", " ".join(sys.argv))
     device = torch.device(args.device)
 
@@ -132,8 +139,12 @@ def main() -> None:
     weight = float(ref["tardiness_weight"])
     if any(float(m.blob["tardiness_weight"]) != weight for m in models):
         raise ValueError("checkpoints disagree on tardiness_weight -- not one problem")
+    n_cust = ref["n_customers"] if args.n_customers is None else args.n_customers
+    cap = ref["capacity"] if args.capacity is None else args.capacity
+    print(f"instances: n_customers {n_cust} (checkpoint {ref['n_customers']}) | "
+          f"capacity {cap} (checkpoint {ref['capacity']})")
     data = generate_cvrptw(
-        args.test_size, ref["n_customers"], ref["capacity"],
+        args.test_size, n_cust, cap,
         service_time=ref["service_time"], shift_end=ref["shift_end"],
         tw_half_width=ref["tw_half_width"], seed=args.test_seed, device=device,
     )
@@ -245,3 +256,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

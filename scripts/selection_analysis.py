@@ -1,4 +1,10 @@
 """Offline analysis of `selection_study` raw tensors (CPAIOR paper): R5 with CIs + D=4 check.
+
+Example (PowerShell, one line):
+    python -u -m scripts.selection_analysis --run 0.3 runs\\selection_M0_b03
+        --run 0.6 runs\\selection_M0_b06 --run 0.9 runs\\selection_M0_b09 --seeds 5
+        2>&1 | Tee-Object -FilePath runs\\selection_analysis.log
+
 Loads <PREFIX>_raw_s{1..S}_b{beta}.pt (written by scripts.selection_study) and prints:
 
   1. R5  multi-start gain (its N1/N160 costs must equal section 1 of the study logs), per instance, seed-averaged, paired 95% CI:
@@ -10,6 +16,10 @@ Loads <PREFIX>_raw_s{1..S}_b{beta}.pt (written by scripts.selection_study) and p
   2. D=4 CHECK  rules recomputed on the first 4 test days only and K=8, i.e. the thesis
      protocol (appendix B, runs\\apriori_15k_pd.json), to locate any difference between the
      thesis numbers and this study (more test days vs different checkpoints).
+  3. HONEST RULES vs PLAN-DIST  paired differences (rule - planned_distance), seed-averaged,
+     95% CI, for the cost AND its components on the executed routes (distance, tardiness,
+     late_count), for expected, saa_out_K8, saa_out_K64; plus saa_in_K64 - planned_distance
+     (cost only: the in-sample score has no components). Descriptive (not pre-registered).
 """
 
 from __future__ import annotations
@@ -44,9 +54,10 @@ def _load(prefix: str, seed_idx: int, beta: float) -> CandidateCosts:
     return CandidateCosts(**blob)
 
 
-def _mean(rule_per_seed: list[dict[str, dict[str, Tensor]]], rule: str) -> Tensor:
-    """Seed-averaged per-instance cost (B,)."""
-    return torch.stack([r[rule]["cost"] for r in rule_per_seed]).mean(dim=0)
+def _mean(rule_per_seed: list[dict[str, dict[str, Tensor]]], rule: str,
+          key: str = "cost") -> Tensor:
+    """Seed-averaged per-instance value of one component (B,)."""
+    return torch.stack([r[rule][key] for r in rule_per_seed]).mean(dim=0)
 
 
 def main() -> None:
@@ -92,6 +103,32 @@ def main() -> None:
                ("hindsight", "expected", "planned_distance", "saa_out_K8", "average")}
         print(f"  {beta:>5g} {row['hindsight']:>10.4f} {row['expected']:>10.4f} "
               f"{row['planned_distance']:>10.4f} {row['saa_out_K8']:>10.4f} {row['average']:>10.4f}")
+
+    print("\n3. HONEST RULES vs PLAN-DIST: rule - planned_distance, seed-averaged, paired 95% CI "
+          "(negative = rule cheaper / shorter / less late)")
+    comps = ("cost", "distance", "tardiness", "late_count")
+    for beta, prefix in runs:
+        per_seed = [apply_rules(_load(prefix, s, beta), ks=(8, 64), ns=(), n_subsets=0)
+                    for s in range(1, args.seeds + 1)]
+        print(f"\n  beta {beta:g}")
+        print(f"    {'rule':>12} {'component':>11} {'diff':>9} {'95% CI':>21}   per-seed (cost only)")
+        for rule in ("expected", "saa_out_K8", "saa_out_K64"):
+            for key in comps:
+                p = paired_difference(_mean(per_seed, rule, key),
+                                      _mean(per_seed, "planned_distance", key))
+                tail = ""
+                if key == "cost":
+                    ps = [float(r[rule]["cost"].mean()) - float(r["planned_distance"]["cost"].mean())
+                          for r in per_seed]
+                    agree = all(x < 0 for x in ps) or all(x > 0 for x in ps)
+                    tail = "  " + " ".join(f"{x:+.4f}" for x in ps) + f"  all agree: {'yes' if agree else 'NO'}"
+                print(f"    {rule:>12} {key:>11} {p['mean']:>+9.4f} [{p['lo']:+8.4f}, {p['hi']:+8.4f}]{tail}")
+        p = paired_difference(_mean(per_seed, "saa_in_K64"), _mean(per_seed, "planned_distance"))
+        ps = [float(r["saa_in_K64"]["cost"].mean()) - float(r["planned_distance"]["cost"].mean())
+              for r in per_seed]
+        agree = all(x < 0 for x in ps) or all(x > 0 for x in ps)
+        print(f"    {'saa_in_K64':>12} {'cost':>11} {p['mean']:>+9.4f} [{p['lo']:+8.4f}, {p['hi']:+8.4f}]  "
+              + " ".join(f"{x:+.4f}" for x in ps) + f"  all agree: {'yes' if agree else 'NO'}")
 
 
 if __name__ == "__main__":
