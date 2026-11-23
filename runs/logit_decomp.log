@@ -1,0 +1,110 @@
+
+===== run started 2026-10-10 19:00:54 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\logit_decomposition.py --device cpu --arm M0 checkpoints\M0_w1_15k_s2024_last.pt checkpoints\M0_w1_15k_s7_last.pt checkpoints\M0_w1_15k_s1234_last.pt --arm M checkpoints\Dp_w1_15k_s2024_last.pt checkpoints\Dp_w1_15k_s7_last.pt checkpoints\Dp_w1_15k_s1234_last.pt --arm DpConst checkpoints\DpConst_w1_15k_s2024_last.pt checkpoints\DpConst_w1_15k_s7_last.pt checkpoints\DpConst_w1_15k_s1234_last.pt --arm DpConstDec checkpoints\DpConstDec_w1_15k_s2024_last.pt checkpoints\DpConstDec_w1_15k_s7_last.pt checkpoints\DpConstDec_w1_15k_s1234_last.pt --arm DpConstEnc checkpoints\DpConstEnc_w1_15k_s7_last.pt checkpoints\DpConstEnc_w1_15k_s1234_last.pt --arm B checkpoints\B_w1_15k_s2024_last.pt checkpoints\B_w1_15k_s7_last.pt checkpoints\B_w1_15k_s1234_last.pt --out runs\logit_decomp
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  M0_w1_15k_s7_last.pt             steps = 15000
+  M0_w1_15k_s1234_last.pt          steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  Dp_w1_15k_s7_last.pt             steps = 15000
+  Dp_w1_15k_s1234_last.pt          steps = 15000
+  DpConst_w1_15k_s2024_last.pt     steps = 15000
+  DpConst_w1_15k_s7_last.pt        steps = 15000
+  DpConst_w1_15k_s1234_last.pt     steps = 15000
+  DpConstDec_w1_15k_s2024_last.pt  steps = 15000
+  DpConstDec_w1_15k_s7_last.pt     steps = 15000
+  DpConstDec_w1_15k_s1234_last.pt  steps = 15000
+  DpConstEnc_w1_15k_s7_last.pt     steps = 15000
+  DpConstEnc_w1_15k_s1234_last.pt  steps = 15000
+  B_w1_15k_s2024_last.pt           steps = 15000
+  B_w1_15k_s7_last.pt              steps = 15000
+  B_w1_15k_s1234_last.pt           steps = 15000
+  all at 15000 steps -- budget matched
+
+64 instances (seed 4242) | analytic env | sampling | all starts | gated arms at their LEARNED lambda
+  M0: variant M0 | learned lambda -, -, -
+C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\logit_decomposition.py:239: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\autograd\generated\python_variable_methods.cpp:823.)
+  lams = [float(l.policy.gate_strength()) if hasattr(l.policy, "gate_w") else None
+  M: variant D' | learned lambda 1.772, 1.732, 1.963
+  DpConst: variant D'-const | learned lambda 2.285, 2.386, 2.202
+  DpConstDec: variant D'-const[decoder] | learned lambda 0.270, 0.316, 0.279
+  DpConstEnc: variant D'-const[encoder] | learned lambda 0.322, 0.019
+  B: variant B | learned lambda -, -, -
+  M0 beta 0.3 done | 0.2 min
+  M0 beta 0.6 done | 0.4 min
+  M0 beta 0.9 done | 0.7 min
+  M beta 0.3 done | 0.9 min
+  M beta 0.6 done | 1.2 min
+  M beta 0.9 done | 1.4 min
+  DpConst beta 0.3 done | 1.7 min
+  DpConst beta 0.6 done | 1.9 min
+  DpConst beta 0.9 done | 2.2 min
+  DpConstDec beta 0.3 done | 2.4 min
+  DpConstDec beta 0.6 done | 2.7 min
+  DpConstDec beta 0.9 done | 2.9 min
+  DpConstEnc beta 0.3 done | 3.1 min
+  DpConstEnc beta 0.6 done | 3.2 min
+  DpConstEnc beta 0.9 done | 3.4 min
+  B beta 0.3 done | 3.6 min
+  B beta 0.6 done | 3.8 min
+  B beta 0.9 done | 4.1 min
+
+1. WHICH TERM DECIDES? spread across open candidates (seed-averaged)
+       arm  beta  compat    edge    e.s2    gate       u  mean u  =compat   =edge
+---------------------------------------------------------------------------------
+        M0   0.3   1.515   0.230 - -   1.598   -1.50    91.2%   35.8%
+        M0   0.6   1.515   0.230 - -   1.598   -1.50    91.2%   35.8%
+        M0   0.9   1.515   0.230 - -   1.598   -1.50    91.2%   35.8%
+         M   0.3   1.454   0.231 -   0.058   1.545   -1.45    90.0%   36.4%
+         M   0.6   1.460   0.227 -   0.117   1.536   -1.41    87.2%   33.2%
+         M   0.9   1.488   0.226 -   0.177   1.541   -1.38    82.9%   29.2%
+   DpConst   0.3   1.513   0.227 -   0.000   1.604   -1.46    91.5%   37.1%
+   DpConst   0.6   1.500   0.223 -   0.000   1.572   -1.38    90.3%   33.3%
+   DpConst   0.9   1.495   0.219 -   0.000   1.546   -1.28    89.3%   28.3%
+DpConstDec   0.3   1.415   0.220 -   0.000   1.497   -1.38    91.3%   36.0%
+DpConstDec   0.6   1.414   0.220 -   0.000   1.497   -1.42    91.3%   36.0%
+DpConstDec   0.9   1.414   0.220 -   0.000   1.496   -1.45    91.3%   36.0%
+DpConstEnc   0.3   1.438   0.219 - -   1.519   -1.38    91.4%   35.6%
+DpConstEnc   0.6   1.433   0.219 - -   1.514   -1.36    91.3%   35.5%
+DpConstEnc   0.9   1.428   0.219 - -   1.508   -1.34    91.2%   35.5%
+         B   0.3   1.440   0.228   0.007 -   1.524   -1.40    91.0%   36.7%
+         B   0.6   1.445   0.226   0.014 -   1.512   -1.38    89.8%   33.3%
+         B   0.9   1.453   0.225   0.021 -   1.507   -1.38    89.7%   30.7%
+
+2. SATURATION (|u| > 2: tanh' < 0.07)
+       arm  beta  open sat  top-2 sat  slope@top  H/Hmax
+--------------------------------------------------------
+        M0   0.3     39.6%       2.5%      0.617   0.100
+        M0   0.6     39.6%       2.5%      0.617   0.100
+        M0   0.9     39.6%       2.5%      0.617   0.100
+         M   0.3     38.6%       2.5%      0.614   0.106
+         M   0.6     39.0%       3.2%      0.617   0.108
+         M   0.9     39.6%       3.9%      0.601   0.120
+   DpConst   0.3     39.9%       4.1%      0.602   0.102
+   DpConst   0.6     39.5%       4.9%      0.610   0.107
+   DpConst   0.9     38.6%       5.5%      0.592   0.119
+DpConstDec   0.3     37.4%       2.8%      0.599   0.102
+DpConstDec   0.6     38.1%       2.8%      0.615   0.102
+DpConstDec   0.9     38.6%       2.9%      0.630   0.102
+DpConstEnc   0.3     39.8%       4.6%      0.596   0.106
+DpConstEnc   0.6     39.4%       4.6%      0.594   0.107
+DpConstEnc   0.9     39.1%       4.5%      0.592   0.108
+         B   0.3     37.8%       2.9%      0.601   0.106
+         B   0.6     38.9%       3.9%      0.610   0.109
+         B   0.9     39.4%       4.4%      0.612   0.114
+
+3. THE GATE ON THE SAME STATES (gated arms; gate on minus gate off)
+       arm  beta  gate const   dH/Hmax       KL    flip   per-seed dH/Hmax
+--------------------------------------------------------------------------
+         M   0.3        0.0%   -0.0069   0.0172    3.3%   -0.0074 -0.0060 -0.0072
+         M   0.6        0.0%   -0.0203   0.0689    6.8%   -0.0204 -0.0153 -0.0251
+         M   0.9        0.0%   -0.0421   0.1663   10.9%   -0.0351 -0.0299 -0.0612
+   DpConst   0.3      100.0%   -0.0110   0.0066    0.0%   -0.0109 -0.0097 -0.0125
+   DpConst   0.6      100.0%   -0.0382   0.0293    0.0%   -0.0397 -0.0360 -0.0389
+   DpConst   0.9      100.0%   -0.0837   0.0825    0.0%   -0.0986 -0.0718 -0.0808
+DpConstDec   0.3      100.0%   -0.0006   0.0001    0.0%   -0.0005 -0.0007 -0.0006
+DpConstDec   0.6      100.0%   -0.0008   0.0004    0.0%   -0.0006 -0.0010 -0.0008
+DpConstDec   0.9      100.0%   -0.0007   0.0009    0.0%   -0.0005 -0.0010 -0.0008
+
+  wrote runs\logit_decomp.json

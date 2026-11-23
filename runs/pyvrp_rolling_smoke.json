@@ -1,0 +1,57 @@
+{
+  "args": {
+    "arm": [
+      [
+        "M0_ftH",
+        "checkpoints\\M0_ftH_s2024_last.pt"
+      ]
+    ],
+    "beta_var": [
+      0.6
+    ],
+    "gate": 0.0,
+    "risk_alpha": null,
+    "test_size": 8,
+    "test_seed": 4242,
+    "scenarios": 1,
+    "iterations": 500,
+    "buffer_k": [],
+    "frozen_limit": 0.2,
+    "workers": 2,
+    "pyvrp_seed": 0,
+    "skip_neural": true,
+    "eval_batch_size": 8,
+    "log_every": 10,
+    "out": "runs\\pyvrp_rolling_smoke",
+    "allow_budget_mismatch": false,
+    "device": "cuda"
+  },
+  "n_instances": 8,
+  "0.6": {
+    "FROZEN": {
+      "distance": 8.55301570892334,
+      "late_count": 2.625,
+      "tardiness": 2.0423583984375,
+      "total": 17.887731552124023
+    },
+    "RH": {
+      "distance": 8.718042075634003,
+      "late_count": 1.25,
+      "tardiness": 1.1682966500520706,
+      "total": 13.554635107517242,
+      "solves": 203.0,
+      "infeasible_solves": 2.0,
+      "mean_iterations": 500.0,
+      "seconds": 17.497400799999014,
+      "seconds_per_instance_day": 2.1871751500002574
+    },
+    "RH_minus_FROZEN": {
+      "mean": -4.333097219467163,
+      "lo": -10.212710819021625,
+      "hi": 1.546516380087299,
+      "se": 2.9998579563473933,
+      "significant": false
+    }
+  },
+  "RH_degradation": 0.0
+}

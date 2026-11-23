@@ -1,0 +1,78 @@
+
+===== run started 2026-10-14 15:51:24 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_rolling.py --arm M0_ftH checkpoints\M0_ftH_s2024_last.pt checkpoints\M0_ftH_s7_last.pt checkpoints\M0_ftH_s1234_last.pt --workers 6 --out runs\pyvrp_rolling
+TRAINING BUDGET of the checkpoints being compared
+  M0_ftH_s2024_last.pt             steps = 20000
+  M0_ftH_s7_last.pt                steps = 20000
+  M0_ftH_s1234_last.pt             steps = 20000
+  all at 20000 steps -- budget matched
+
+256 instances (seed 4242), n = 20, capacity 20, tardiness_weight 2.0, device cuda, 4 days, PyVRP 500 iterations per re-plan, 6 workers
+frozen mean-value plans @ 1 s: feasible 256/256, complete 256/256
+
+=== beta 0.3 ===
+  FROZEN   distance 8.1722 | late_count 1.8936 | tardiness 1.1742 | total 14.3077
+    day 0 step 0: 256 instances active, 256 solves, 14 s
+    day 0 step 10: 256 instances active, 2816 solves, 79 s
+    day 0 step 20: 256 instances active, 5376 solves, 107 s
+    day 1 step 0: 256 instances active, 6681 solves, 120 s
+    day 1 step 10: 256 instances active, 9241 solves, 189 s
+    day 1 step 20: 256 instances active, 11801 solves, 215 s
+    day 2 step 0: 256 instances active, 13125 solves, 228 s
+    day 2 step 10: 256 instances active, 15685 solves, 294 s
+    day 2 step 20: 256 instances active, 18245 solves, 320 s
+    day 3 step 0: 256 instances active, 19551 solves, 333 s
+    day 3 step 10: 256 instances active, 22111 solves, 399 s
+    day 3 step 20: 256 instances active, 24671 solves, 427 s
+  RH       distance 8.6316 | late_count 1.1260 | tardiness 0.6008 | total 12.0851 | 0.423 s per instance-day, infeasible re-plans 246/25727
+  RH - FROZEN: -2.2225 [-2.5997, -1.8454]
+
+  arm (planned_distance) - RH, paired over instances:
+       arm       arm        RH      diff                95% CI   per-seed diff   all agree
+    M0_ftH   11.5623   12.0851   -0.5228 [ -0.7954,  -0.2503]   -0.5686 -0.4207 -0.5792   yes
+
+=== beta 0.6 ===
+  FROZEN   distance 8.1722 | late_count 2.4209 | tardiness 2.1091 | total 17.2321
+    day 0 step 0: 256 instances active, 256 solves, 16 s
+    day 0 step 10: 256 instances active, 2816 solves, 81 s
+    day 0 step 20: 256 instances active, 5376 solves, 117 s
+    day 1 step 0: 256 instances active, 6706 solves, 136 s
+    day 1 step 10: 256 instances active, 9266 solves, 201 s
+    day 1 step 20: 256 instances active, 11826 solves, 237 s
+    day 2 step 0: 256 instances active, 13161 solves, 255 s
+    day 2 step 10: 256 instances active, 15721 solves, 322 s
+    day 2 step 20: 256 instances active, 18281 solves, 358 s
+    day 3 step 0: 256 instances active, 19610 solves, 373 s
+    day 3 step 10: 256 instances active, 22170 solves, 440 s
+    day 3 step 20: 256 instances active, 24730 solves, 476 s
+  RH       distance 8.7369 | late_count 1.4248 | tardiness 1.1150 | total 13.8165 | 0.473 s per instance-day, infeasible re-plans 333/25811
+  RH - FROZEN: -3.4156 [-3.9850, -2.8462]
+
+  arm (planned_distance) - RH, paired over instances:
+       arm       arm        RH      diff                95% CI   per-seed diff   all agree
+    M0_ftH   13.3012   13.8165   -0.5153 [ -0.9031,  -0.1275]   -0.6471 -0.4196 -0.4790   yes
+
+=== beta 0.9 ===
+  FROZEN   distance 8.1722 | late_count 2.5664 | tardiness 2.8028 | total 18.9105
+    day 0 step 0: 256 instances active, 256 solves, 14 s
+    day 0 step 10: 256 instances active, 2816 solves, 80 s
+    day 0 step 20: 256 instances active, 5376 solves, 117 s
+    day 1 step 0: 256 instances active, 6715 solves, 133 s
+    day 1 step 10: 256 instances active, 9275 solves, 198 s
+    day 1 step 20: 256 instances active, 11835 solves, 235 s
+    day 2 step 0: 256 instances active, 13176 solves, 258 s
+    day 2 step 10: 256 instances active, 15736 solves, 336 s
+    day 2 step 20: 256 instances active, 18296 solves, 377 s
+    day 3 step 0: 256 instances active, 19647 solves, 397 s
+    day 3 step 10: 256 instances active, 22207 solves, 469 s
+    day 3 step 20: 256 instances active, 24767 solves, 506 s
+  RH       distance 8.7754 | late_count 1.5869 | tardiness 1.5952 | total 15.1395 | 0.506 s per instance-day, infeasible re-plans 414/25852
+  RH - FROZEN: -3.7710 [-4.4520, -3.0899]
+
+  arm (planned_distance) - RH, paired over instances:
+       arm       arm        RH      diff                95% CI   per-seed diff   all agree
+    M0_ftH   14.6979   15.1395   -0.4416 [ -0.9398,  +0.0566]   -0.6423 -0.2384 -0.4440   yes
+
+RH degradation (beta 0.9 - beta 0.3): +3.0544
+
+wrote runs\pyvrp_rolling.json and runs\pyvrp_rolling_per_instance.pt

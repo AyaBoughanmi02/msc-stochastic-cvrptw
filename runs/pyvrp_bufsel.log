@@ -1,0 +1,43 @@
+
+===== run started 2026-10-06 12:53:05 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_reference.py --arm M0 checkpoints\M0_w1_15k_s2024_last.pt --skip-neural --test-seed 777 --test-size 512 --beta-var 0.15 0.375 0.6 --time-limits 1 --plan-limit 1 --buffer-k 0.25 0.5 0.75 1.0 --buffer-limit 1 --workers 4 --out runs\pyvrp_bufsel
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+512 instances (seed 777), n = 20 customers, capacity 20, tardiness_weight 2.0, device cuda
+simulator from checkpoint: alpha 0.3, omega 1.0, eta 0.6, mean-preserving ripple: True
+
+0. PYVRP PLANS (deterministic, travel time = distance)
+  limit     1 s: feasible 512/512, complete 512/512, mean runtime 1.002 s
+
+1a. DETERMINISTIC (alpha 0, beta 0): PyVRP
+  limit     1 s: cost 8.2189
+
+2. STOCHASTIC: PyVRP mean-value plan (@ 1 s) executed on the test days, vs arms (rule planned_distance; hindsight for reference)
+  PyVRP beta 0.15: distance 8.2189 | late_count 1.4917 | tardiness 0.5322 | total 12.2666
+  PyVRP beta 0.375: distance 8.2189 | late_count 2.1050 | tardiness 1.2218 | total 14.8725
+  PyVRP beta 0.6: distance 8.2189 | late_count 2.4277 | tardiness 1.8962 | total 16.8667
+
+  PyVRP degradation (beta 0.6 - beta 0.15): +4.6001
+
+3. X0b: sigma-buffered PyVRP plans @ 1 s, k in [0.0, 0.25, 0.5, 0.75, 1.0] (infeasible buffered plans fall back to the next smaller k)
+  beta 0.15 k 0     cost 12.2666 (distance 8.2189, penalty 4.0477) fallbacks 0/512
+  beta 0.15 k 0.25  cost 11.4472 (distance 8.3216, penalty 3.1256) fallbacks 0/512
+  beta 0.15 k 0.5   cost 10.7429 (distance 8.4977, penalty 2.2452) fallbacks 0/512
+  beta 0.15 k 0.75  cost 10.5434 (distance 8.8117, penalty 1.7317) fallbacks 0/512
+  beta 0.15 k 1     cost 10.6145 (distance 9.2533, penalty 1.3612) fallbacks 0/512
+  beta 0.375 k 0     cost 14.8725 (distance 8.2189, penalty 6.6536) fallbacks 0/512
+  beta 0.375 k 0.25  cost 13.7400 (distance 8.4115, penalty 5.3286) fallbacks 0/512
+  beta 0.375 k 0.5   cost 13.1469 (distance 8.8806, penalty 4.2663) fallbacks 0/512
+  beta 0.375 k 0.75  cost 13.0866 (distance 9.6697, penalty 3.4169) fallbacks 1/512
+  beta 0.375 k 1     cost 13.6293 (distance 10.6292, penalty 3.0001) fallbacks 45/512
+  beta 0.6 k 0     cost 16.8667 (distance 8.2189, penalty 8.6478) fallbacks 0/512
+  beta 0.6 k 0.25  cost 15.3914 (distance 8.4977, penalty 6.8937) fallbacks 0/512
+  beta 0.6 k 0.5   cost 14.9695 (distance 9.2530, penalty 5.7165) fallbacks 0/512
+  beta 0.6 k 0.75  cost 15.2079 (distance 10.4087, penalty 4.7991) fallbacks 27/512
+  beta 0.6 k 1     cost 15.5422 (distance 11.2070, penalty 4.3351) fallbacks 247/512
+  mean over beta: k 0: 14.6686 | k 0.25: 13.5262 | k 0.5: 12.9531 | k 0.75: 12.9460 | k 1: 13.2620
+  argmin k on THIS instance set: 0.75  (select k only from the held-out run; on the test set, report the held-out k against k = 0)
+
+wrote runs\pyvrp_bufsel.json and runs\pyvrp_bufsel_per_instance.pt

@@ -1,0 +1,48 @@
+
+===== run started 2026-11-21 15:37:32 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\e3_ranking_bias.py --ckpt checkpoints\M0_ftH_s2024_last.pt checkpoints\M0_ftH_s7_last.pt checkpoints\M0_ftH_s1234_last.pt --out runs\e3_ranking_bias
+3 checkpoints | 64 instances x 256 days (128 for the estimators, 128 for the truth) | K in [1, 4, 16, 128] | tardiness_weight 2.0
+
+M0_ftH_s2024_last.pt beta 0.3 | true cost 11.842 (sd over starts 0.454)
+    corr   A +0.653 H1 +0.592 S1 +0.329 H4 +0.669 S4 +0.385 H16 +0.786 S16 +0.560 H128 +0.883 S128 +0.805
+    regret A 0.260 H1 0.260 S1 0.375 H4 0.237 S4 0.413 H16 0.190 S16 0.322 H128 0.112 S128 0.219
+    corr H1-A -0.061 [-0.093, -0.029] | corr H1-S1 +0.263 [+0.248, +0.278] | regret A-H1 -0.000 [-0.072, +0.072] | regret S1-H1 +0.115 [+0.079, +0.151] | 2.2 min
+M0_ftH_s2024_last.pt beta 0.6 | true cost 13.654 (sd over starts 0.520)
+    corr   A +0.530 H1 +0.443 S1 +0.211 H4 +0.496 S4 +0.251 H16 +0.620 S16 +0.376 H128 +0.756 S128 +0.629
+    regret A 0.422 H1 0.439 S1 0.574 H4 0.432 S4 0.626 H16 0.398 S16 0.543 H128 0.323 S128 0.424
+    corr H1-A -0.087 [-0.132, -0.041] | corr H1-S1 +0.232 [+0.216, +0.247] | regret A-H1 -0.016 [-0.135, +0.102] | regret S1-H1 +0.136 [+0.096, +0.175] | 4.4 min
+M0_ftH_s2024_last.pt beta 0.9 | true cost 14.938 (sd over starts 0.596)
+    corr   A +0.446 H1 +0.374 S1 +0.170 H4 +0.409 S4 +0.192 H16 +0.527 S16 +0.294 H128 +0.672 S128 +0.511
+    regret A 0.570 H1 0.548 S1 0.694 H4 0.551 S4 0.782 H16 0.509 S16 0.698 H128 0.341 S128 0.547
+    corr H1-A -0.072 [-0.123, -0.020] | corr H1-S1 +0.204 [+0.188, +0.220] | regret A-H1 +0.022 [-0.133, +0.176] | regret S1-H1 +0.146 [+0.106, +0.185] | 6.6 min
+M0_ftH_s7_last.pt beta 0.3 | true cost 11.901 (sd over starts 0.453)
+    corr   A +0.600 H1 +0.585 S1 +0.332 H4 +0.667 S4 +0.398 H16 +0.783 S16 +0.567 H128 +0.878 S128 +0.817
+    regret A 0.305 H1 0.259 S1 0.395 H4 0.228 S4 0.433 H16 0.177 S16 0.356 H128 0.140 S128 0.198
+    corr H1-A -0.015 [-0.063, +0.034] | corr H1-S1 +0.253 [+0.242, +0.264] | regret A-H1 +0.046 [-0.023, +0.115] | regret S1-H1 +0.136 [+0.107, +0.165] | 8.8 min
+M0_ftH_s7_last.pt beta 0.6 | true cost 13.687 (sd over starts 0.511)
+    corr   A +0.451 H1 +0.441 S1 +0.220 H4 +0.499 S4 +0.264 H16 +0.623 S16 +0.391 H128 +0.772 S128 +0.679
+    regret A 0.423 H1 0.399 S1 0.557 H4 0.396 S4 0.628 H16 0.310 S16 0.535 H128 0.207 S128 0.250
+    corr H1-A -0.010 [-0.065, +0.045] | corr H1-S1 +0.221 [+0.206, +0.235] | regret A-H1 +0.024 [-0.080, +0.128] | regret S1-H1 +0.158 [+0.119, +0.197] | 11.0 min
+M0_ftH_s7_last.pt beta 0.9 | true cost 14.970 (sd over starts 0.584)
+    corr   A +0.370 H1 +0.352 S1 +0.166 H4 +0.395 S4 +0.199 H16 +0.508 S16 +0.300 H128 +0.661 S128 +0.541
+    regret A 0.711 H1 0.526 S1 0.709 H4 0.533 S4 0.789 H16 0.462 S16 0.676 H128 0.361 S128 0.412
+    corr H1-A -0.018 [-0.078, +0.042] | corr H1-S1 +0.185 [+0.168, +0.203] | regret A-H1 +0.185 [+0.026, +0.344] | regret S1-H1 +0.182 [+0.141, +0.223] | 13.2 min
+M0_ftH_s1234_last.pt beta 0.3 | true cost 11.860 (sd over starts 0.453)
+    corr   A +0.645 H1 +0.587 S1 +0.326 H4 +0.664 S4 +0.387 H16 +0.773 S16 +0.542 H128 +0.869 S128 +0.776
+    regret A 0.258 H1 0.249 S1 0.387 H4 0.227 S4 0.417 H16 0.172 S16 0.365 H128 0.138 S128 0.168
+    corr H1-A -0.058 [-0.102, -0.015] | corr H1-S1 +0.261 [+0.246, +0.276] | regret A-H1 +0.009 [-0.053, +0.071] | regret S1-H1 +0.138 [+0.110, +0.166] | 15.4 min
+M0_ftH_s1234_last.pt beta 0.6 | true cost 13.692 (sd over starts 0.507)
+    corr   A +0.509 H1 +0.442 S1 +0.211 H4 +0.500 S4 +0.255 H16 +0.623 S16 +0.383 H128 +0.762 S128 +0.638
+    regret A 0.455 H1 0.408 S1 0.579 H4 0.408 S4 0.638 H16 0.355 S16 0.558 H128 0.252 S128 0.419
+    corr H1-A -0.067 [-0.107, -0.027] | corr H1-S1 +0.231 [+0.217, +0.245] | regret A-H1 +0.047 [-0.056, +0.150] | regret S1-H1 +0.172 [+0.137, +0.207] | 17.6 min
+M0_ftH_s1234_last.pt beta 0.9 | true cost 14.985 (sd over starts 0.588)
+    corr   A +0.437 H1 +0.369 S1 +0.165 H4 +0.410 S4 +0.194 H16 +0.525 S16 +0.303 H128 +0.662 S128 +0.521
+    regret A 0.580 H1 0.539 S1 0.727 H4 0.555 S4 0.777 H16 0.484 S16 0.711 H128 0.399 S128 0.564
+    corr H1-A -0.069 [-0.122, -0.015] | corr H1-S1 +0.203 [+0.189, +0.218] | regret A-H1 +0.041 [-0.094, +0.175] | regret S1-H1 +0.188 [+0.149, +0.227] | 19.8 min
+
+READING (fixed before running)
+  beta 0.3: R3a mixed: no claim | R3b hybrid ranks better than sampled on every seed: True
+  beta 0.6: R3a mixed: no claim | R3b hybrid ranks better than sampled on every seed: True
+  beta 0.9: R3a mixed: no claim | R3b hybrid ranks better than sampled on every seed: True
+
+  wrote runs\e3_ranking_bias.json

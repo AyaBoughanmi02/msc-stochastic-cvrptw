@@ -1,0 +1,21 @@
+
+===== run started 2026-10-14 15:42:01 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_rolling.py --arm M0_ftH checkpoints\M0_ftH_s2024_last.pt --test-size 8 --scenarios 1 --beta-var 0.6 --skip-neural --workers 2 --frozen-limit 0.2 --out runs\pyvrp_rolling_smoke
+TRAINING BUDGET of the checkpoints being compared
+  M0_ftH_s2024_last.pt             steps = 20000
+  all at 20000 steps -- budget matched
+
+8 instances (seed 4242), n = 20, capacity 20, tardiness_weight 2.0, device cuda, 1 days, PyVRP 500 iterations per re-plan, 2 workers
+frozen mean-value plans @ 0.2 s: feasible 8/8, complete 8/8
+
+=== beta 0.6 ===
+  FROZEN   distance 8.5530 | late_count 2.6250 | tardiness 2.0424 | total 17.8877
+    day 0 step 0: 8 instances active, 8 solves, 7 s
+    day 0 step 10: 8 instances active, 88 solves, 13 s
+    day 0 step 20: 8 instances active, 168 solves, 16 s
+  RH       distance 8.7180 | late_count 1.2500 | tardiness 1.1683 | total 13.5546 | 2.187 s per instance-day, infeasible re-plans 2/203
+  RH - FROZEN: -4.3331 [-10.2127, +1.5465]
+
+RH degradation (beta 0.6 - beta 0.6): +0.0000
+
+wrote runs\pyvrp_rolling_smoke.json and runs\pyvrp_rolling_smoke_per_instance.pt

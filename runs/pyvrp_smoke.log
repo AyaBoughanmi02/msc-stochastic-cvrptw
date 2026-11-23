@@ -1,0 +1,59 @@
+
+===== run started 2026-10-06 12:52:12 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_reference.py --arm M0 checkpoints\M0_w1_15k_s2024_last.pt --arm M checkpoints\Dp_w1_15k_s2024_last.pt --test-size 16 --scenarios 1 --time-limits 0.1 --plan-limit 0.1 --workers 4 --out runs\pyvrp_smoke
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+16 instances (seed 4242), n = 20 customers, capacity 20, tardiness_weight 2.0, device cuda
+simulator from checkpoint: alpha 0.3, omega 1.0, eta 0.6, mean-preserving ripple: True
+
+0. PYVRP PLANS (deterministic, travel time = distance)
+  limit   0.1 s: feasible 16/16, complete 16/16, mean runtime 0.100 s
+
+1a. DETERMINISTIC (alpha 0, beta 0): PyVRP
+  limit   0.1 s: cost 8.2628
+
+1b. DETERMINISTIC: neural arms vs PyVRP @ 0.1 s (gap = (arm - pyvrp) / pyvrp, per instance, %)
+     arm seed    best20  gap20%  ms/inst   best160  gap160%  ms/inst
+--------------------------------------------------------------------
+      M0    1    9.7012   17.85    30.26    9.4826    15.27    52.60
+  M0 seed-averaged, paired vs PyVRP:
+    best20       M0    9.7012    8.2628   +1.4384 [ +1.2074,  +1.6694]   +1.4384   yes
+    best160      M0    9.4826    8.2628   +1.2198 [ +1.0125,  +1.4271]   +1.2198   yes
+       M    1    9.3921   14.04    19.32    9.0345     9.56    55.52
+  M seed-averaged, paired vs PyVRP:
+    best20        M    9.3921    8.2628   +1.1293 [ +0.8944,  +1.3641]   +1.1293   yes
+    best160       M    9.0345    8.2628   +0.7716 [ +0.6127,  +0.9306]   +0.7716   yes
+  PyVRP time per instance: the limit itself (0.1 s, one CPU core); neural ms/inst includes env building, on this device
+
+2. STOCHASTIC: PyVRP mean-value plan (@ 0.1 s) executed on the test days, vs arms (rule planned_distance; hindsight for reference)
+  PyVRP beta 0.3: distance 8.2628 | late_count 2.1875 | tardiness 0.8655 | total 14.3688
+  PyVRP beta 0.6: distance 8.2628 | late_count 2.0000 | tardiness 1.6765 | total 15.6159
+  PyVRP beta 0.9: distance 8.2628 | late_count 2.7500 | tardiness 2.9305 | total 19.6238
+
+  beta 0.3: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   12.1829   14.3688   -2.1860 [ -5.4756,  +1.1037]   -2.1860   yes
+           (hindsight mean 10.3193; check against apriori_saa_w1)
+         M   11.4367   14.3688   -2.9321 [ -6.5826,  +0.7184]   -2.9321   yes
+           (hindsight mean 9.7452; check against apriori_saa_w1)
+
+  beta 0.6: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   13.7777   15.6159   -1.8382 [ -6.7634,  +3.0871]   -1.8382   yes
+           (hindsight mean 11.3037; check against apriori_saa_w1)
+         M   13.0225   15.6159   -2.5934 [ -7.6883,  +2.5015]   -2.5934   yes
+           (hindsight mean 10.3854; check against apriori_saa_w1)
+
+  beta 0.9: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   15.3000   19.6238   -4.3238 [-11.6643,  +3.0168]   -4.3238   yes
+           (hindsight mean 11.9551; check against apriori_saa_w1)
+         M   14.6885   19.6238   -4.9353 [-12.5550,  +2.6843]   -4.9353   yes
+           (hindsight mean 10.9457; check against apriori_saa_w1)
+
+  PyVRP degradation (beta 0.9 - beta 0.3): +5.2550
+
+wrote runs\pyvrp_smoke.json and runs\pyvrp_smoke_per_instance.pt

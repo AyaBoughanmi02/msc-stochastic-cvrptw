@@ -1,0 +1,111 @@
+
+===== run started 2026-10-06 13:31:26 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_reference.py --arm M0 checkpoints\M0_w1_15k_s2024_last.pt checkpoints\M0_w1_15k_s7_last.pt checkpoints\M0_w1_15k_s1234_last.pt --arm M checkpoints\Dp_w1_15k_s2024_last.pt checkpoints\Dp_w1_15k_s7_last.pt checkpoints\Dp_w1_15k_s1234_last.pt --arm VGTR0 checkpoints\VGTR_w1_15k_s2024_last.pt checkpoints\VGTR_w1_15k_s7_last.pt checkpoints\VGTR_w1_15k_s1234_last.pt --arm B checkpoints\B_w1_15k_s2024_last.pt checkpoints\B_w1_15k_s7_last.pt checkpoints\B_w1_15k_s1234_last.pt --buffer-k 0.75 --workers 4 --out runs\pyvrp_ref_w1
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  M0_w1_15k_s7_last.pt             steps = 15000
+  M0_w1_15k_s1234_last.pt          steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  Dp_w1_15k_s7_last.pt             steps = 15000
+  Dp_w1_15k_s1234_last.pt          steps = 15000
+  VGTR_w1_15k_s2024_last.pt        steps = 15000
+  VGTR_w1_15k_s7_last.pt           steps = 15000
+  VGTR_w1_15k_s1234_last.pt        steps = 15000
+  B_w1_15k_s2024_last.pt           steps = 15000
+  B_w1_15k_s7_last.pt              steps = 15000
+  B_w1_15k_s1234_last.pt           steps = 15000
+  all at 15000 steps -- budget matched
+
+256 instances (seed 4242), n = 20 customers, capacity 20, tardiness_weight 2.0, device cuda
+simulator from checkpoint: alpha 0.3, omega 1.0, eta 0.6, mean-preserving ripple: True
+
+0. PYVRP PLANS (deterministic, travel time = distance)
+  limit   0.1 s: feasible 256/256, complete 256/256, mean runtime 0.104 s
+  limit     1 s: feasible 256/256, complete 256/256, mean runtime 1.002 s
+  limit     5 s: feasible 256/256, complete 256/256, mean runtime 5.001 s
+
+1a. DETERMINISTIC (alpha 0, beta 0): PyVRP
+  limit   0.1 s: cost 8.1779
+  limit     1 s: cost 8.1722
+  limit     5 s: cost 8.1719
+
+1b. DETERMINISTIC: neural arms vs PyVRP @ 5 s (gap = (arm - pyvrp) / pyvrp, per instance, %)
+     arm seed    best20  gap20%  ms/inst   best160  gap160%  ms/inst
+--------------------------------------------------------------------
+      M0    1    9.8190   20.42    23.33    9.5019    16.44    50.54
+      M0    2    9.8751   21.08    20.99    9.5526    17.09    50.92
+      M0    3    9.8875   21.25    21.34    9.4998    16.50    51.34
+  M0 seed-averaged, paired vs PyVRP:
+    best20       M0    9.8605    8.1719   +1.6886 [ +1.6181,  +1.7592]   +1.6471 +1.7032 +1.7156   yes
+    best160      M0    9.5181    8.1719   +1.3462 [ +1.2850,  +1.4074]   +1.3300 +1.3808 +1.3279   yes
+       M    1    9.3594   14.65    21.41    9.0593    10.96    51.85
+       M    2    9.3932   15.11    21.46    9.0676    11.09    51.74
+       M    3    9.3695   14.81    21.65    9.0851    11.29    51.54
+  M seed-averaged, paired vs PyVRP:
+    best20        M    9.3740    8.1719   +1.2022 [ +1.1523,  +1.2520]   +1.1876 +1.2213 +1.1976   yes
+    best160       M    9.0707    8.1719   +0.8988 [ +0.8562,  +0.9414]   +0.8875 +0.8958 +0.9132   yes
+   VGTR0    1    8.9928   10.08    24.30    8.7554     7.16    54.82
+   VGTR0    2    8.9964   10.10    24.31    8.7467     7.09    55.10
+   VGTR0    3    8.9587    9.63    24.57    8.7448     7.04    53.61
+  VGTR0 seed-averaged, paired vs PyVRP:
+    best20    VGTR0    8.9826    8.1719   +0.8107 [ +0.7704,  +0.8510]   +0.8209 +0.8245 +0.7868   yes
+    best160   VGTR0    8.7490    8.1719   +0.5771 [ +0.5435,  +0.6106]   +0.5836 +0.5748 +0.5729   yes
+       B    1    9.3141   14.13    19.65    9.0351    10.67    50.13
+       B    2    9.2650   13.49    19.38    8.9710     9.88    50.44
+       B    3    9.2503   13.32    19.73    8.9698     9.85    50.41
+  B seed-averaged, paired vs PyVRP:
+    best20        B    9.2764    8.1719   +1.1046 [ +1.0586,  +1.1505]   +1.1422 +1.0931 +1.0784   yes
+    best160       B    8.9920    8.1719   +0.8201 [ +0.7803,  +0.8599]   +0.8632 +0.7992 +0.7979   yes
+  PyVRP time per instance: the limit itself (5 s, one CPU core); neural ms/inst includes env building, on this device
+
+2. STOCHASTIC: PyVRP mean-value plan (@ 5 s) executed on the test days, vs arms (rule planned_distance; hindsight for reference)
+  PyVRP beta 0.3: distance 8.1719 | late_count 1.9014 | tardiness 1.1767 | total 14.3279
+  PyVRP beta 0.6: distance 8.1719 | late_count 2.4297 | tardiness 2.1197 | total 17.2706
+  PyVRP beta 0.9: distance 8.1719 | late_count 2.5713 | tardiness 2.8114 | total 18.9373
+
+  beta 0.3: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   11.9858   14.3279   -2.3421 [ -2.8337,  -1.8506]   -2.2921 -2.4089 -2.3254   yes
+           (hindsight mean 10.3746; check against apriori_saa_w1)
+         M   11.6626   14.3279   -2.6653 [ -3.1626,  -2.1681]   -2.7342 -2.5932 -2.6686   yes
+           (hindsight mean 9.8112; check against apriori_saa_w1)
+     VGTR0   12.0581   14.3279   -2.2698 [ -2.7747,  -1.7649]   -2.2664 -2.3477 -2.1953   yes
+           (hindsight mean 9.3550; check against apriori_saa_w1)
+         B   11.8959   14.3279   -2.4321 [ -2.9225,  -1.9416]   -2.3985 -2.4152 -2.4825   yes
+           (hindsight mean 10.2616; check against apriori_saa_w1)
+
+  beta 0.6: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   13.7672   17.2706   -3.5035 [ -4.1914,  -2.8156]   -3.3673 -3.6174 -3.5256   yes
+           (hindsight mean 11.0461; check against apriori_saa_w1)
+         M   13.4611   17.2706   -3.8096 [ -4.5163,  -3.1028]   -3.9438 -3.7772 -3.7077   yes
+           (hindsight mean 10.3500; check against apriori_saa_w1)
+     VGTR0   13.9711   17.2706   -3.2995 [ -4.0113,  -2.5877]   -3.3528 -3.3077 -3.2380   yes
+           (hindsight mean 9.7306; check against apriori_saa_w1)
+         B   14.0887   17.2706   -3.1820 [ -3.8871,  -2.4769]   -3.1731 -3.1887 -3.1842   yes
+           (hindsight mean 11.5727; check against apriori_saa_w1)
+
+  beta 0.9: arm (planned_distance) - PyVRP mean-value plan
+       arm   arm(pd)     pyvrp      diff                95% CI   per-seed diff            all agree
+        M0   15.1168   18.9373   -3.8205 [ -4.6746,  -2.9665]   -3.5483 -4.0219 -3.8915   yes
+           (hindsight mean 11.5516; check against apriori_saa_w1)
+         M   14.7807   18.9373   -4.1566 [ -5.0361,  -3.2771]   -4.2680 -4.1951 -4.0068   yes
+           (hindsight mean 10.7447; check against apriori_saa_w1)
+     VGTR0   15.1320   18.9373   -3.8054 [ -4.7085,  -2.9023]   -3.7541 -3.8559 -3.8062   yes
+           (hindsight mean 9.9877; check against apriori_saa_w1)
+         B   15.7787   18.9373   -3.1587 [ -3.9888,  -2.3285]   -3.1055 -3.2340 -3.1365   yes
+           (hindsight mean 12.6990; check against apriori_saa_w1)
+
+  PyVRP degradation (beta 0.9 - beta 0.3): +4.6094
+
+3. X0b: sigma-buffered PyVRP plans @ 1 s, k in [0.0, 0.75] (infeasible buffered plans fall back to the next smaller k)
+  beta 0.3 k 0     cost 14.3077 (distance 8.1722, penalty 6.1355) fallbacks 0/256
+  beta 0.3 k 0.75  cost 12.5928 (distance 9.3334, penalty 3.2593) fallbacks 0/256
+  beta 0.6 k 0     cost 17.2321 (distance 8.1722, penalty 9.0600) fallbacks 0/256
+  beta 0.6 k 0.75  cost 15.5254 (distance 10.3058, penalty 5.2196) fallbacks 12/256
+  beta 0.9 k 0     cost 18.9105 (distance 8.1722, penalty 10.7383) fallbacks 0/256
+  beta 0.9 k 0.75  cost 18.3459 (distance 10.5041, penalty 7.8418) fallbacks 69/256
+  mean over beta: k 0: 16.8168 | k 0.75: 15.4880
+  argmin k on THIS instance set: 0.75  (select k only from the held-out run; on the test set, report the held-out k against k = 0)
+
+wrote runs\pyvrp_ref_w1.json and runs\pyvrp_ref_w1_per_instance.pt

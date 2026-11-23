@@ -1,0 +1,162 @@
+
+===== run started 2026-10-10 17:03:59 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\apriori_study.py --arm M0 checkpoints\M0_w1_15k_s2024_last.pt checkpoints\M0_w1_15k_s7_last.pt checkpoints\M0_w1_15k_s1234_last.pt --arm DpConst checkpoints\DpConst_w1_15k_s2024_last.pt checkpoints\DpConst_w1_15k_s7_last.pt checkpoints\DpConst_w1_15k_s1234_last.pt --arm DpConstDec checkpoints\DpConstDec_w1_15k_s2024_last.pt checkpoints\DpConstDec_w1_15k_s7_last.pt checkpoints\DpConstDec_w1_15k_s1234_last.pt --arm M checkpoints\Dp_w1_15k_s2024_last.pt checkpoints\Dp_w1_15k_s7_last.pt checkpoints\Dp_w1_15k_s1234_last.pt --rank-rule planned_distance --out runs\apriori_gateloc3
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  M0_w1_15k_s7_last.pt             steps = 15000
+  M0_w1_15k_s1234_last.pt          steps = 15000
+  DpConst_w1_15k_s2024_last.pt     steps = 15000
+  DpConst_w1_15k_s7_last.pt        steps = 15000
+  DpConst_w1_15k_s1234_last.pt     steps = 15000
+  DpConstDec_w1_15k_s2024_last.pt  steps = 15000
+  DpConstDec_w1_15k_s7_last.pt     steps = 15000
+  DpConstDec_w1_15k_s1234_last.pt  steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  Dp_w1_15k_s7_last.pt             steps = 15000
+  Dp_w1_15k_s1234_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+arms: M0 (M0, 3 seeds), DpConst (D'-const, 3 seeds), DpConstDec (D'-const[decoder], 3 seeds), M (D', 3 seeds)
+gate lambda forced to 0 where present | VGT-R alpha learned
+256 instances (seed 4242) | 4 test days | 8 selection days (saa) | augment=True | tardiness_weight 2.0
+
+  [  1/36] M0 seed 1 beta 0.3 | hindsight 10.3462 | expected 12.0555 | planned_distance 12.0359 | saa 12.0660 | average 12.6821 | 2.8 min
+  [  2/36] M0 seed 2 beta 0.3 | hindsight 10.4120 | expected 12.0171 | planned_distance 11.9190 | saa 12.1338 | average 12.7202 | 5.7 min
+  [  3/36] M0 seed 3 beta 0.3 | hindsight 10.3657 | expected 11.9826 | planned_distance 12.0025 | saa 12.1329 | average 12.7098 | 8.5 min
+  [  4/36] M0 seed 1 beta 0.6 | hindsight 11.0053 | expected 14.0147 | planned_distance 13.9033 | saa 13.9030 | average 14.4981 | 11.3 min
+  [  5/36] M0 seed 2 beta 0.6 | hindsight 11.0841 | expected 13.9422 | planned_distance 13.6532 | saa 14.1449 | average 14.5458 | 14.1 min
+  [  6/36] M0 seed 3 beta 0.6 | hindsight 11.0488 | expected 14.0330 | planned_distance 13.7450 | saa 13.8677 | average 14.4747 | 16.9 min
+  [  7/36] M0 seed 1 beta 0.9 | hindsight 11.4956 | expected 15.3534 | planned_distance 15.3891 | saa 15.6862 | average 15.8730 | 19.7 min
+  [  8/36] M0 seed 2 beta 0.9 | hindsight 11.6229 | expected 15.5383 | planned_distance 14.9155 | saa 15.5922 | average 15.8677 | 22.5 min
+  [  9/36] M0 seed 3 beta 0.9 | hindsight 11.5364 | expected 15.5414 | planned_distance 15.0459 | saa 15.4359 | average 15.8402 | 25.3 min
+  [ 10/36] DpConst seed 1 beta 0.3 | hindsight 9.6604 | expected 11.7971 | planned_distance 11.7432 | saa 11.7256 | average 12.3612 | 28.2 min
+  [ 11/36] DpConst seed 2 beta 0.3 | hindsight 9.7951 | expected 11.8241 | planned_distance 11.6448 | saa 12.0165 | average 12.3627 | 31.0 min
+  [ 12/36] DpConst seed 3 beta 0.3 | hindsight 9.8348 | expected 11.8734 | planned_distance 11.7105 | saa 11.8522 | average 12.4134 | 33.8 min
+  [ 13/36] DpConst seed 1 beta 0.6 | hindsight 10.1575 | expected 13.8117 | planned_distance 13.6553 | saa 13.5412 | average 14.2440 | 36.6 min
+  [ 14/36] DpConst seed 2 beta 0.6 | hindsight 10.3557 | expected 13.7210 | planned_distance 13.5640 | saa 13.7130 | average 14.2128 | 39.4 min
+  [ 15/36] DpConst seed 3 beta 0.6 | hindsight 10.4013 | expected 13.8269 | planned_distance 13.6372 | saa 13.7784 | average 14.2787 | 42.2 min
+  [ 16/36] DpConst seed 1 beta 0.9 | hindsight 10.5510 | expected 15.0457 | planned_distance 15.0713 | saa 15.0977 | average 15.6030 | 45.0 min
+  [ 17/36] DpConst seed 2 beta 0.9 | hindsight 10.7304 | expected 15.1994 | planned_distance 14.9064 | saa 15.0057 | average 15.5541 | 47.8 min
+  [ 18/36] DpConst seed 3 beta 0.9 | hindsight 10.7845 | expected 15.4345 | planned_distance 14.9040 | saa 15.1905 | average 15.6583 | 50.6 min
+  [ 19/36] DpConstDec seed 1 beta 0.3 | hindsight 10.3703 | expected 11.9839 | planned_distance 11.9267 | saa 12.1480 | average 12.6694 | 53.5 min
+  [ 20/36] DpConstDec seed 2 beta 0.3 | hindsight 10.4172 | expected 11.9482 | planned_distance 11.9738 | saa 12.1259 | average 12.6832 | 56.4 min
+  [ 21/36] DpConstDec seed 3 beta 0.3 | hindsight 10.3879 | expected 11.9967 | planned_distance 11.9346 | saa 12.1115 | average 12.6648 | 59.3 min
+  [ 22/36] DpConstDec seed 1 beta 0.6 | hindsight 11.0445 | expected 14.0138 | planned_distance 13.5804 | saa 13.9706 | average 14.4358 | 62.2 min
+  [ 23/36] DpConstDec seed 2 beta 0.6 | hindsight 11.1108 | expected 13.9956 | planned_distance 13.7304 | saa 14.0746 | average 14.4843 | 65.1 min
+  [ 24/36] DpConstDec seed 3 beta 0.6 | hindsight 11.0928 | expected 14.0875 | planned_distance 13.8962 | saa 14.0620 | average 14.4950 | 68.0 min
+  [ 25/36] DpConstDec seed 1 beta 0.9 | hindsight 11.5638 | expected 15.5056 | planned_distance 14.8309 | saa 15.3618 | average 15.7655 | 70.9 min
+  [ 26/36] DpConstDec seed 2 beta 0.9 | hindsight 11.5813 | expected 15.6776 | planned_distance 15.2289 | saa 15.4759 | average 15.8468 | 73.8 min
+  [ 27/36] DpConstDec seed 3 beta 0.9 | hindsight 11.6154 | expected 15.6741 | planned_distance 15.1835 | saa 15.7550 | average 15.8373 | 76.8 min
+  [ 28/36] M seed 1 beta 0.3 | hindsight 9.7996 | expected 11.9428 | planned_distance 11.5938 | saa 11.8480 | average 12.3788 | 79.7 min
+  [ 29/36] M seed 2 beta 0.3 | hindsight 9.7996 | expected 11.7030 | planned_distance 11.7348 | saa 11.7841 | average 12.4015 | 82.6 min
+  [ 30/36] M seed 3 beta 0.3 | hindsight 9.8346 | expected 11.7802 | planned_distance 11.6593 | saa 11.8959 | average 12.4043 | 85.4 min
+  [ 31/36] M seed 1 beta 0.6 | hindsight 10.3172 | expected 13.7840 | planned_distance 13.3268 | saa 13.7831 | average 14.2264 | 88.3 min
+  [ 32/36] M seed 2 beta 0.6 | hindsight 10.3397 | expected 13.7217 | planned_distance 13.4934 | saa 13.8331 | average 14.2246 | 91.1 min
+  [ 33/36] M seed 3 beta 0.6 | hindsight 10.3930 | expected 13.8806 | planned_distance 13.5629 | saa 13.8114 | average 14.2732 | 93.9 min
+  [ 34/36] M seed 1 beta 0.9 | hindsight 10.6963 | expected 15.3949 | planned_distance 14.6694 | saa 15.1862 | average 15.5873 | 96.7 min
+  [ 35/36] M seed 2 beta 0.9 | hindsight 10.7184 | expected 15.0751 | planned_distance 14.7423 | saa 15.1826 | average 15.5892 | 99.5 min
+  [ 36/36] M seed 3 beta 0.9 | hindsight 10.8195 | expected 15.4100 | planned_distance 14.9305 | saa 15.3826 | average 15.6264 | 102.3 min
+
+1. COST PER CHOICE RULE (seed-averaged; lower is better)
+       arm  beta        hindsight         expected planned_distance              saa          average
+-----------------------------------------------------------------------------------------------------
+        M0   0.3          10.3746          12.0184          11.9858          12.1109          12.7040
+        M0   0.6          11.0461          13.9966          13.7672          13.9718          14.5062
+        M0   0.9          11.5516          15.4777          15.1168          15.5714          15.8603
+   DpConst   0.3           9.7634          11.8316          11.6995          11.8648          12.3791
+   DpConst   0.6          10.3048          13.7865          13.6188          13.6775          14.2452
+   DpConst   0.9          10.6886          15.2265          14.9605          15.0979          15.6051
+DpConstDec   0.3          10.3918          11.9762          11.9450          12.1285          12.6725
+DpConstDec   0.6          11.0827          14.0323          13.7357          14.0357          14.4717
+DpConstDec   0.9          11.5868          15.6191          15.0811          15.5309          15.8165
+         M   0.3           9.8112          11.8087          11.6626          11.8426          12.3949
+         M   0.6          10.3500          13.7954          13.4611          13.8092          14.2414
+         M   0.9          10.7447          15.2933          14.7807          15.2505          15.6010
+
+2a. DOES CHOOSING BY PLANNED DISTANCE BEAT NO SELECTION?  planned_distance - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+        M0   0.3   -0.7182 [ -0.8158,  -0.6207]    -0.8918  +0.0560   -0.6462 -0.8011 -0.7073   yes
+        M0   0.6   -0.7390 [ -0.8844,  -0.5936]    -0.8522  +0.0331   -0.5947 -0.8926 -0.7297   yes
+        M0   0.9   -0.7435 [ -0.9418,  -0.5452]    -0.8338  +0.0174   -0.4839 -0.9523 -0.7943   yes
+   DpConst   0.3   -0.6796 [ -0.8032,  -0.5560]    -0.8094  +0.0384   -0.6181 -0.7179 -0.7029   yes
+   DpConst   0.6   -0.6263 [ -0.8189,  -0.4338]    -0.7637  +0.0259   -0.5887 -0.6488 -0.6415   yes
+   DpConst   0.9   -0.6446 [ -0.9263,  -0.3628]    -0.7461  +0.0086   -0.5317 -0.6478 -0.7543   yes
+DpConstDec   0.3   -0.7275 [ -0.8301,  -0.6248]    -0.8692  +0.0548   -0.7427 -0.7095 -0.7303   yes
+DpConstDec   0.6   -0.7360 [ -0.8843,  -0.5877]    -0.8328  +0.0372   -0.8554 -0.7540 -0.5988   yes
+DpConstDec   0.9   -0.7354 [ -0.9501,  -0.5207]    -0.8084  +0.0208   -0.9346 -0.6179 -0.6538   yes
+         M   0.3   -0.7322 [ -0.8451,  -0.6194]    -0.8286  +0.0336   -0.7851 -0.6667 -0.7450   yes
+         M   0.6   -0.7803 [ -0.9753,  -0.5854]    -0.8013  +0.0096   -0.8996 -0.7312 -0.7102   yes
+         M   0.9   -0.8202 [ -1.0709,  -0.5696]    -0.7688  +0.0018   -0.9179 -0.8469 -0.6959   yes
+
+2b. DOES THE ANALYTIC EXPECTED COST BEAT NO SELECTION?  expected - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+        M0   0.3   -0.6856 [ -0.7868,  -0.5845]    -0.7081  +0.0013   -0.6266 -0.7031 -0.7272   yes
+        M0   0.6   -0.5095 [ -0.6522,  -0.3668]    -0.4329  -0.0278   -0.4834 -0.6036 -0.4416   yes
+        M0   0.9   -0.3826 [ -0.5902,  -0.1750]    -0.2241  -0.0431   -0.5196 -0.3294 -0.2988   yes
+   DpConst   0.3   -0.5476 [ -0.6667,  -0.4285]    -0.4992  -0.0228   -0.5641 -0.5386 -0.5401   yes
+   DpConst   0.6   -0.4586 [ -0.6431,  -0.2742]    -0.2311  -0.0672   -0.4323 -0.4918 -0.4518   yes
+   DpConst   0.9   -0.3786 [ -0.6181,  -0.1391]    -0.1148  -0.0669   -0.5572 -0.3548 -0.2237   yes
+DpConstDec   0.3   -0.6962 [ -0.7982,  -0.5943]    -0.6970  -0.0011   -0.6855 -0.7351 -0.6681   yes
+DpConstDec   0.6   -0.4394 [ -0.5946,  -0.2842]    -0.4060  -0.0299   -0.4220 -0.4888 -0.4075   yes
+DpConstDec   0.9   -0.1974 [ -0.4198,  +0.0249]    -0.2149  -0.0456   -0.2599 -0.1692 -0.1632   yes
+         M   0.3   -0.5862 [ -0.6987,  -0.4737]    -0.5276  -0.0302   -0.4360 -0.6985 -0.6240   yes
+         M   0.6   -0.4460 [ -0.6261,  -0.2658]    -0.2525  -0.0611   -0.4424 -0.5029 -0.3926   yes
+         M   0.9   -0.3076 [ -0.5593,  -0.0560]    -0.1237  -0.0480   -0.1924 -0.5141 -0.2164   yes
+
+2c. DOES SAA BEAT NO SELECTION?  saa - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+        M0   0.3   -0.5931 [ -0.7042,  -0.4821]    -0.6985  +0.0280   -0.6161 -0.5863 -0.5769   yes
+        M0   0.6   -0.5343 [ -0.6986,  -0.3700]    -0.5430  +0.0194   -0.5951 -0.4009 -0.6070   yes
+        M0   0.9   -0.2889 [ -0.5257,  -0.0520]    -0.4498  +0.0448   -0.1868 -0.2755 -0.4043   yes
+   DpConst   0.3   -0.5144 [ -0.6396,  -0.3891]    -0.5704  +0.0117   -0.6356 -0.3462 -0.5613   yes
+   DpConst   0.6   -0.5677 [ -0.7362,  -0.3991]    -0.4370  -0.0017   -0.7028 -0.4999 -0.5003   yes
+   DpConst   0.9   -0.5072 [ -0.7333,  -0.2811]    -0.3923  +0.0070   -0.5053 -0.5485 -0.4677   yes
+DpConstDec   0.3   -0.5440 [ -0.6623,  -0.4257]    -0.6629  +0.0216   -0.5214 -0.5573 -0.5533   yes
+DpConstDec   0.6   -0.4360 [ -0.6049,  -0.2670]    -0.5241  +0.0333   -0.4652 -0.4097 -0.4329   yes
+DpConstDec   0.9   -0.2856 [ -0.4984,  -0.0728]    -0.4326  +0.0267   -0.4037 -0.3709 -0.0823   yes
+         M   0.3   -0.5522 [ -0.6790,  -0.4254]    -0.6071  +0.0134   -0.5309 -0.6174 -0.5084   yes
+         M   0.6   -0.4322 [ -0.6083,  -0.2561]    -0.4629  +0.0223   -0.4433 -0.3915 -0.4618   yes
+         M   0.9   -0.3505 [ -0.6190,  -0.0820]    -0.3973  +0.0126   -0.4011 -0.4066 -0.2438   yes
+
+2d. DOES THE VARIANCE HELP THE CHOICE?  saa - planned_distance (negative = uncertainty-aware choice cheaper)
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+        M0   0.3   +0.1251 [ +0.0128,  +0.2373]    +0.1932  -0.0280   +0.0301 +0.2148 +0.1304   yes
+        M0   0.6   +0.2046 [ +0.0069,  +0.4024]    +0.3092  -0.0137   -0.0004 +0.4917 +0.1227   NO
+        M0   0.9   +0.4546 [ +0.1769,  +0.7323]    +0.3840  +0.0273   +0.2971 +0.6767 +0.3901   yes
+   DpConst   0.3   +0.1653 [ +0.0109,  +0.3196]    +0.2390  -0.0267   -0.0175 +0.3717 +0.1416   NO
+   DpConst   0.6   +0.0587 [ -0.1708,  +0.2881]    +0.3266  -0.0277   -0.1142 +0.1489 +0.1412   NO
+   DpConst   0.9   +0.1374 [ -0.1612,  +0.4360]    +0.3539  -0.0016   +0.0264 +0.0993 +0.2865   yes
+DpConstDec   0.3   +0.1835 [ +0.0419,  +0.3250]    +0.2062  -0.0332   +0.2213 +0.1522 +0.1770   yes
+DpConstDec   0.6   +0.3001 [ +0.0839,  +0.5163]    +0.3087  -0.0039   +0.3902 +0.3443 +0.1658   yes
+DpConstDec   0.9   +0.4498 [ +0.1944,  +0.7052]    +0.3758  +0.0059   +0.5309 +0.2470 +0.5715   yes
+         M   0.3   +0.1800 [ +0.0373,  +0.3228]    +0.2214  -0.0202   +0.2542 +0.0493 +0.2366   yes
+         M   0.6   +0.3481 [ +0.1165,  +0.5798]    +0.3384  +0.0127   +0.4563 +0.3397 +0.2484   yes
+         M   0.9   +0.4697 [ +0.1964,  +0.7431]    +0.3715  +0.0107   +0.5168 +0.4403 +0.4521   yes
+
+3. HOW OPTIMISTIC WERE THE EARLIER TABLES?  hindsight - planned_distance
+        M0: beta 0.3: -1.6112  beta 0.6: -2.7211  beta 0.9: -3.5652
+   DpConst: beta 0.3: -1.9361  beta 0.6: -3.3140  beta 0.9: -4.2719
+DpConstDec: beta 0.3: -1.5532  beta 0.6: -2.6530  beta 0.9: -3.4942
+         M: beta 0.3: -1.8514  beta 0.6: -3.1111  beta 0.9: -4.0360
+
+4. DEPLOYABLE MODEL RANKING (rule 'planned_distance'), each arm - M0, paired; degradation = cost(beta 0.9) - cost(beta 0.3)
+       arm   beta       arm        M0      diff                95% CI   per-seed diff            all agree
+----------------------------------------------------------------------------------------------------------
+   DpConst    0.3   11.6995   11.9858   -0.2863 [ -0.4221,  -0.1505]   -0.2927 -0.2742 -0.2920   yes
+   DpConst    0.6   13.6188   13.7672   -0.1483 [ -0.3684,  +0.0718]   -0.2480 -0.0892 -0.1078   yes
+   DpConst    0.9   14.9605   15.1168   -0.1563 [ -0.4548,  +0.1422]   -0.3178 -0.0091 -0.1419   yes
+   DpConst  degr.    3.2610    3.1310   +0.1301 [ -0.1163,  +0.3764]
+DpConstDec    0.3   11.9450   11.9858   -0.0408 [ -0.1455,  +0.0639]   -0.1092 +0.0547 -0.0679   NO
+DpConstDec    0.6   13.7357   13.7672   -0.0315 [ -0.1860,  +0.1230]   -0.3229 +0.0772 +0.1512   NO
+DpConstDec    0.9   15.0811   15.1168   -0.0357 [ -0.2489,  +0.1775]   -0.5582 +0.3135 +0.1376   NO
+DpConstDec  degr.    3.1361    3.1310   +0.0051 [ -0.1738,  +0.1840]
+         M    0.3   11.6626   11.9858   -0.3232 [ -0.4668,  -0.1796]   -0.4421 -0.1843 -0.3432   yes
+         M    0.6   13.4611   13.7672   -0.3061 [ -0.5231,  -0.0891]   -0.5765 -0.1598 -0.1820   yes
+         M    0.9   14.7807   15.1168   -0.3361 [ -0.6075,  -0.0646]   -0.7197 -0.1732 -0.1153   yes
+         M  degr.    3.1181    3.1310   -0.0129 [ -0.2337,  +0.2079]
+
+  wrote runs\apriori_gateloc3.json

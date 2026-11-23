@@ -1,0 +1,114 @@
+
+===== run started 2026-10-04 16:40:14 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\apriori_study.py --arm M0 checkpoints\M0_w1_15k_s2024_last.pt checkpoints\M0_w1_15k_s7_last.pt checkpoints\M0_w1_15k_s1234_last.pt --arm M checkpoints\Dp_w1_15k_s2024_last.pt checkpoints\Dp_w1_15k_s7_last.pt checkpoints\Dp_w1_15k_s1234_last.pt --arm VGTR0 checkpoints\VGTR_w1_15k_s2024_last.pt checkpoints\VGTR_w1_15k_s7_last.pt checkpoints\VGTR_w1_15k_s1234_last.pt --arm B checkpoints\B_w1_15k_s2024_last.pt checkpoints\B_w1_15k_s7_last.pt checkpoints\B_w1_15k_s1234_last.pt --risk-alpha 0 --out runs\apriori_w1
+TRAINING BUDGET of the checkpoints being compared
+  M0_w1_15k_s2024_last.pt          steps = 15000
+  M0_w1_15k_s7_last.pt             steps = 15000
+  M0_w1_15k_s1234_last.pt          steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  Dp_w1_15k_s7_last.pt             steps = 15000
+  Dp_w1_15k_s1234_last.pt          steps = 15000
+  VGTR_w1_15k_s2024_last.pt        steps = 15000
+  VGTR_w1_15k_s7_last.pt           steps = 15000
+  VGTR_w1_15k_s1234_last.pt        steps = 15000
+  B_w1_15k_s2024_last.pt           steps = 15000
+  B_w1_15k_s7_last.pt              steps = 15000
+  B_w1_15k_s1234_last.pt           steps = 15000
+  all at 15000 steps -- budget matched
+
+arms: M0 (M0, 3 seeds), M (D', 3 seeds), VGTR0 (VGT-R, 3 seeds), B (B, 3 seeds)
+gate lambda forced to 0 where present | VGT-R alpha forced to 0
+256 instances (seed 4242) | 4 days | augment=True | tardiness_weight 2.0
+
+  [  1/36] M0 seed 1 beta 0.3 | hindsight 10.3462 | expected 12.0555 | planned_distance 12.0359 | 1.1 min
+  [  2/36] M0 seed 2 beta 0.3 | hindsight 10.4120 | expected 12.0171 | planned_distance 11.9190 | 2.2 min
+  [  3/36] M0 seed 3 beta 0.3 | hindsight 10.3657 | expected 11.9826 | planned_distance 12.0025 | 3.3 min
+  [  4/36] M0 seed 1 beta 0.6 | hindsight 11.0053 | expected 14.0147 | planned_distance 13.9033 | 4.5 min
+  [  5/36] M0 seed 2 beta 0.6 | hindsight 11.0841 | expected 13.9422 | planned_distance 13.6532 | 5.6 min
+  [  6/36] M0 seed 3 beta 0.6 | hindsight 11.0488 | expected 14.0330 | planned_distance 13.7450 | 6.7 min
+  [  7/36] M0 seed 1 beta 0.9 | hindsight 11.4956 | expected 15.3534 | planned_distance 15.3891 | 7.8 min
+  [  8/36] M0 seed 2 beta 0.9 | hindsight 11.6229 | expected 15.5383 | planned_distance 14.9155 | 9.0 min
+  [  9/36] M0 seed 3 beta 0.9 | hindsight 11.5364 | expected 15.5414 | planned_distance 15.0459 | 10.1 min
+  [ 10/36] M seed 1 beta 0.3 | hindsight 9.7996 | expected 11.9428 | planned_distance 11.5938 | 11.2 min
+  [ 11/36] M seed 2 beta 0.3 | hindsight 9.7996 | expected 11.7030 | planned_distance 11.7348 | 12.4 min
+  [ 12/36] M seed 3 beta 0.3 | hindsight 9.8346 | expected 11.7802 | planned_distance 11.6593 | 13.5 min
+  [ 13/36] M seed 1 beta 0.6 | hindsight 10.3172 | expected 13.7840 | planned_distance 13.3268 | 14.7 min
+  [ 14/36] M seed 2 beta 0.6 | hindsight 10.3397 | expected 13.7217 | planned_distance 13.4934 | 15.8 min
+  [ 15/36] M seed 3 beta 0.6 | hindsight 10.3930 | expected 13.8806 | planned_distance 13.5629 | 17.0 min
+  [ 16/36] M seed 1 beta 0.9 | hindsight 10.6963 | expected 15.3949 | planned_distance 14.6694 | 18.1 min
+  [ 17/36] M seed 2 beta 0.9 | hindsight 10.7184 | expected 15.0751 | planned_distance 14.7423 | 19.3 min
+  [ 18/36] M seed 3 beta 0.9 | hindsight 10.8195 | expected 15.4100 | planned_distance 14.9305 | 20.5 min
+  [ 19/36] VGTR0 seed 1 beta 0.3 | hindsight 9.3677 | expected 12.0468 | planned_distance 12.0616 | 21.6 min
+  [ 20/36] VGTR0 seed 2 beta 0.3 | hindsight 9.3524 | expected 11.8851 | planned_distance 11.9802 | 22.8 min
+  [ 21/36] VGTR0 seed 3 beta 0.3 | hindsight 9.3448 | expected 12.0303 | planned_distance 12.1326 | 24.0 min
+  [ 22/36] VGTR0 seed 1 beta 0.6 | hindsight 9.7605 | expected 14.0316 | planned_distance 13.9178 | 25.2 min
+  [ 23/36] VGTR0 seed 2 beta 0.6 | hindsight 9.6900 | expected 13.8600 | planned_distance 13.9630 | 26.4 min
+  [ 24/36] VGTR0 seed 3 beta 0.6 | hindsight 9.7412 | expected 13.9744 | planned_distance 14.0327 | 27.6 min
+  [ 25/36] VGTR0 seed 1 beta 0.9 | hindsight 10.0310 | expected 15.2161 | planned_distance 15.1833 | 28.8 min
+  [ 26/36] VGTR0 seed 2 beta 0.9 | hindsight 9.9193 | expected 14.9454 | planned_distance 15.0814 | 30.0 min
+  [ 27/36] VGTR0 seed 3 beta 0.9 | hindsight 10.0127 | expected 15.1106 | planned_distance 15.1312 | 31.2 min
+  [ 28/36] B seed 1 beta 0.3 | hindsight 10.2699 | expected 11.8548 | planned_distance 11.9294 | 32.4 min
+  [ 29/36] B seed 2 beta 0.3 | hindsight 10.2688 | expected 11.9739 | planned_distance 11.9127 | 33.5 min
+  [ 30/36] B seed 3 beta 0.3 | hindsight 10.2461 | expected 11.8588 | planned_distance 11.8454 | 34.6 min
+  [ 31/36] B seed 1 beta 0.6 | hindsight 11.5881 | expected 14.3912 | planned_distance 14.0976 | 35.8 min
+  [ 32/36] B seed 2 beta 0.6 | hindsight 11.5814 | expected 14.4661 | planned_distance 14.0820 | 36.9 min
+  [ 33/36] B seed 3 beta 0.6 | hindsight 11.5488 | expected 14.3337 | planned_distance 14.0864 | 38.1 min
+  [ 34/36] B seed 1 beta 0.9 | hindsight 12.9011 | expected 16.1684 | planned_distance 15.8319 | 39.3 min
+  [ 35/36] B seed 2 beta 0.9 | hindsight 12.6339 | expected 16.0859 | planned_distance 15.7033 | 40.4 min
+  [ 36/36] B seed 3 beta 0.9 | hindsight 12.5621 | expected 15.9740 | planned_distance 15.8009 | 41.5 min
+
+1. COST PER CHOICE RULE (seed-averaged; lower is better)
+       arm  beta         hindsight          expected  planned_distance
+----------------------------------------------------------------------
+        M0   0.3           10.3746           12.0184           11.9858
+        M0   0.6           11.0461           13.9966           13.7672
+        M0   0.9           11.5516           15.4777           15.1168
+         M   0.3            9.8112           11.8087           11.6626
+         M   0.6           10.3500           13.7954           13.4611
+         M   0.9           10.7447           15.2933           14.7807
+     VGTR0   0.3            9.3550           11.9874           12.0581
+     VGTR0   0.6            9.7306           13.9553           13.9711
+     VGTR0   0.9            9.9877           15.0907           15.1320
+         B   0.3           10.2616           11.8958           11.8959
+         B   0.6           11.5727           14.3970           14.0887
+         B   0.9           12.6990           16.0761           15.7787
+
+2. DOES THE VARIANCE HELP THE CHOICE?  expected - planned_distance (negative = the uncertainty-aware choice is cheaper)
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+        M0   0.3   +0.0326 [ -0.0758,  +0.1410]    +0.1837  -0.0547   +0.0197 +0.0981 -0.0199   NO
+        M0   0.6   +0.2295 [ +0.0413,  +0.4176]    +0.4193  -0.0609   +0.1113 +0.2890 +0.2881   yes
+        M0   0.9   +0.3609 [ +0.1089,  +0.6128]    +0.6096  -0.0605   -0.0357 +0.6228 +0.4956   NO
+         M   0.3   +0.1461 [ +0.0115,  +0.2807]    +0.3010  -0.0638   +0.3490 -0.0317 +0.1209   NO
+         M   0.6   +0.3344 [ +0.1082,  +0.5605]    +0.5489  -0.0706   +0.4572 +0.2283 +0.3177   yes
+         M   0.9   +0.5126 [ +0.2124,  +0.8127]    +0.6451  -0.0498   +0.7255 +0.3328 +0.4794   yes
+     VGTR0   0.3   -0.0707 [ -0.2423,  +0.1009]    +0.3757  -0.1751   -0.0147 -0.0951 -0.1023   yes
+     VGTR0   0.6   -0.0158 [ -0.2777,  +0.2461]    +0.4336  -0.1833   +0.1138 -0.1030 -0.0583   NO
+     VGTR0   0.9   -0.0413 [ -0.3585,  +0.2760]    +0.4391  -0.1732   +0.0328 -0.1360 -0.0206   NO
+         B   0.3   -0.0000 [ -0.1269,  +0.1268]    +0.1791  -0.0599   -0.0746 +0.0611 +0.0134   NO
+         B   0.6   +0.3084 [ +0.1358,  +0.4809]    +0.2953  -0.0260   +0.2936 +0.3841 +0.2473   yes
+         B   0.9   +0.2974 [ +0.0879,  +0.5068]    +0.3607  -0.0163   +0.3365 +0.3826 +0.1731   yes
+
+3. HOW OPTIMISTIC WERE THE EARLIER TABLES?  hindsight - expected
+        M0: beta 0.3: -1.6438  beta 0.6: -2.9506  beta 0.9: -3.9261
+         M: beta 0.3: -1.9974  beta 0.6: -3.4455  beta 0.9: -4.5486
+     VGTR0: beta 0.3: -2.6325  beta 0.6: -4.2247  beta 0.9: -5.1030
+         B: beta 0.3: -1.6343  beta 0.6: -2.8243  beta 0.9: -3.3770
+
+4. DEPLOYABLE MODEL RANKING (rule 'expected'), each arm - M0, paired; degradation = cost(beta 0.9) - cost(beta 0.3)
+       arm   beta       arm        M0      diff                95% CI   per-seed diff            all agree
+----------------------------------------------------------------------------------------------------------
+         M    0.3   11.8087   12.0184   -0.2097 [ -0.3270,  -0.0925]   -0.1127 -0.3141 -0.2023   yes
+         M    0.6   13.7954   13.9966   -0.2012 [ -0.3668,  -0.0356]   -0.2307 -0.2205 -0.1524   yes
+         M    0.9   15.2933   15.4777   -0.1844 [ -0.3921,  +0.0234]   +0.0415 -0.4632 -0.1315   NO
+         M  degr.    3.4846    3.4593   +0.0254 [ -0.1995,  +0.2502]
+     VGTR0    0.3   11.9874   12.0184   -0.0310 [ -0.2154,  +0.1535]   -0.0087 -0.1320 +0.0477   NO
+     VGTR0    0.6   13.9553   13.9966   -0.0413 [ -0.3387,  +0.2561]   +0.0169 -0.0822 -0.0587   NO
+     VGTR0    0.9   15.0907   15.4777   -0.3870 [ -0.7600,  -0.0140]   -0.1373 -0.5929 -0.4309   yes
+     VGTR0  degr.    3.1033    3.4593   -0.3560 [ -0.6844,  -0.0277]
+         B    0.3   11.8958   12.0184   -0.1226 [ -0.2291,  -0.0161]   -0.2007 -0.0432 -0.1238   yes
+         B    0.6   14.3970   13.9966   +0.4004 [ +0.2216,  +0.5791]   +0.3765 +0.5239 +0.3007   yes
+         B    0.9   16.0761   15.4777   +0.5984 [ +0.3552,  +0.8416]   +0.8150 +0.5476 +0.4326   yes
+         B  degr.    4.1802    3.4593   +0.7209 [ +0.4646,  +0.9773]
+
+  wrote runs\apriori_w1.json

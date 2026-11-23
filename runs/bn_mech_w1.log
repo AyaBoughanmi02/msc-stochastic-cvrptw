@@ -1,0 +1,265 @@
+
+===== run started 2026-09-28 21:47:05 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\bn_mechanism.py --baseline checkpoints\B_w1_15k_s2024_last.pt --control checkpoints\Dp_w1_15k_s2024_last.pt --out runs\bn_mech_w1 --drift-only
+TRAINING BUDGET of the checkpoints being compared
+  B_w1_15k_s2024_last.pt           steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+omega 1.0 | trained beta range [0.15, 0.6] | beta_ref (decoder rescale) 0.375 | tardiness_weight 2.0
+
+1. NORMALISATION DRIFT  (eval-mode bn_edge vs what training-mode BN produced on a batch at the same beta)
+   drift = 0: evaluation sees exactly what training saw.  M is the placebo.
+
+   B  checkpoints\B_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.6868   0.6570   0.9038   (outside trained range)
+     0.15   0.5563   0.5283   0.9161
+     0.20   0.4236   0.3996   0.9318
+     0.25   0.2896   0.2710   0.9506
+     0.30   0.1549   0.1426   0.9720
+     0.35   0.0261   0.0192   0.9958
+     0.40   0.1209   0.1164   1.0217
+     0.45   0.2576   0.2447   1.0493
+     0.50   0.3955   0.3733   1.0785
+     0.55   0.5341   0.5020   1.1091
+     0.60   0.6731   0.6307   1.1408
+     0.65   0.8126   0.7594   1.1736   (outside trained range)
+     0.70   0.9525   0.8881   1.2072   (outside trained range)
+     0.75   1.0926   1.0168   1.2417   (outside trained range)
+     0.80   1.2331   1.1455   1.2770   (outside trained range)
+     0.85   1.3738   1.2743   1.3129   (outside trained range)
+     0.90   1.5147   1.4030   1.3494   (outside trained range)
+     0.95   1.6558   1.5317   1.3865   (outside trained range)
+     1.00   1.7971   1.6605   1.4240   (outside trained range)
+   running statistics best match a batch at beta ~ 0.35
+
+   M  checkpoints\Dp_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.0206   0.0180   1.0100   (outside trained range)
+     0.15   0.0206   0.0180   1.0100
+     0.20   0.0206   0.0180   1.0100
+     0.25   0.0206   0.0180   1.0100
+     0.30   0.0206   0.0180   1.0100
+     0.35   0.0206   0.0180   1.0100
+     0.40   0.0206   0.0180   1.0100
+     0.45   0.0206   0.0180   1.0100
+     0.50   0.0206   0.0180   1.0100
+     0.55   0.0206   0.0180   1.0100
+     0.60   0.0206   0.0180   1.0100
+     0.65   0.0206   0.0180   1.0100   (outside trained range)
+     0.70   0.0206   0.0180   1.0100   (outside trained range)
+     0.75   0.0206   0.0180   1.0100   (outside trained range)
+     0.80   0.0206   0.0180   1.0100   (outside trained range)
+     0.85   0.0206   0.0180   1.0100   (outside trained range)
+     0.90   0.0206   0.0180   1.0100   (outside trained range)
+     0.95   0.0206   0.0180   1.0100   (outside trained range)
+     1.00   0.0206   0.0180   1.0100   (outside trained range)
+
+   wrote runs\bn_mech_w1_drift.csv
+   matplotlib not installed; skipping the figure (the CSV has the data)
+
+--drift-only: stopping before the rollouts.
+
+===== run started 2026-09-28 21:56:35 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\bn_mechanism.py --baseline checkpoints\B_w1_15k_s2024_last.pt --control checkpoints\Dp_w1_15k_s2024_last.pt --out runs\bn_mech_w1 --drift-only
+TRAINING BUDGET of the checkpoints being compared
+  B_w1_15k_s2024_last.pt           steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+omega 1.0 | trained beta range [0.15, 0.6] | beta_ref (decoder rescale) 0.375 | tardiness_weight 2.0
+
+1. NORMALISATION DRIFT  (eval-mode bn_edge vs what training-mode BN produced on a batch at the same beta)
+   drift = 0: evaluation sees exactly what training saw.  M is the placebo.
+
+   B  checkpoints\B_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.6868   0.6570   0.9038   (outside trained range)
+     0.15   0.5563   0.5283   0.9161
+     0.20   0.4236   0.3996   0.9318
+     0.25   0.2896   0.2710   0.9506
+     0.30   0.1549   0.1426   0.9720
+     0.35   0.0261   0.0192   0.9958
+     0.40   0.1209   0.1164   1.0217
+     0.45   0.2576   0.2447   1.0493
+     0.50   0.3955   0.3733   1.0785
+     0.55   0.5341   0.5020   1.1091
+     0.60   0.6731   0.6307   1.1408
+     0.65   0.8126   0.7594   1.1736   (outside trained range)
+     0.70   0.9525   0.8881   1.2072   (outside trained range)
+     0.75   1.0926   1.0168   1.2417   (outside trained range)
+     0.80   1.2331   1.1455   1.2770   (outside trained range)
+     0.85   1.3738   1.2743   1.3129   (outside trained range)
+     0.90   1.5147   1.4030   1.3494   (outside trained range)
+     0.95   1.6558   1.5317   1.3865   (outside trained range)
+     1.00   1.7971   1.6605   1.4240   (outside trained range)
+   running statistics best match a batch at beta ~ 0.35
+
+   M  checkpoints\Dp_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.0206   0.0180   1.0100   (outside trained range)
+     0.15   0.0206   0.0180   1.0100
+     0.20   0.0206   0.0180   1.0100
+     0.25   0.0206   0.0180   1.0100
+     0.30   0.0206   0.0180   1.0100
+     0.35   0.0206   0.0180   1.0100
+     0.40   0.0206   0.0180   1.0100
+     0.45   0.0206   0.0180   1.0100
+     0.50   0.0206   0.0180   1.0100
+     0.55   0.0206   0.0180   1.0100
+     0.60   0.0206   0.0180   1.0100
+     0.65   0.0206   0.0180   1.0100   (outside trained range)
+     0.70   0.0206   0.0180   1.0100   (outside trained range)
+     0.75   0.0206   0.0180   1.0100   (outside trained range)
+     0.80   0.0206   0.0180   1.0100   (outside trained range)
+     0.85   0.0206   0.0180   1.0100   (outside trained range)
+     0.90   0.0206   0.0180   1.0100   (outside trained range)
+     0.95   0.0206   0.0180   1.0100   (outside trained range)
+     1.00   0.0206   0.0180   1.0100   (outside trained range)
+
+   wrote runs\bn_mech_w1_drift.csv
+   wrote runs\bn_mech_w1_drift.png
+
+--drift-only: stopping before the rollouts.
+
+===== run started 2026-09-28 22:00:56 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\bn_mechanism.py --baseline checkpoints\B_w1_15k_s2024_last.pt --control checkpoints\Dp_w1_15k_s2024_last.pt --out runs\bn_mech_w1
+TRAINING BUDGET of the checkpoints being compared
+  B_w1_15k_s2024_last.pt           steps = 15000
+  Dp_w1_15k_s2024_last.pt          steps = 15000
+  all at 15000 steps -- budget matched
+
+omega 1.0 | trained beta range [0.15, 0.6] | beta_ref (decoder rescale) 0.375 | tardiness_weight 2.0
+
+1. NORMALISATION DRIFT  (eval-mode bn_edge vs what training-mode BN produced on a batch at the same beta)
+   drift = 0: evaluation sees exactly what training saw.  M is the placebo.
+
+   B  checkpoints\B_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.6868   0.6570   0.9038   (outside trained range)
+     0.15   0.5563   0.5283   0.9161
+     0.20   0.4236   0.3996   0.9318
+     0.25   0.2896   0.2710   0.9506
+     0.30   0.1549   0.1426   0.9720
+     0.35   0.0261   0.0192   0.9958
+     0.40   0.1209   0.1164   1.0217
+     0.45   0.2576   0.2447   1.0493
+     0.50   0.3955   0.3733   1.0785
+     0.55   0.5341   0.5020   1.1091
+     0.60   0.6731   0.6307   1.1408
+     0.65   0.8126   0.7594   1.1736   (outside trained range)
+     0.70   0.9525   0.8881   1.2072   (outside trained range)
+     0.75   1.0926   1.0168   1.2417   (outside trained range)
+     0.80   1.2331   1.1455   1.2770   (outside trained range)
+     0.85   1.3738   1.2743   1.3129   (outside trained range)
+     0.90   1.5147   1.4030   1.3494   (outside trained range)
+     0.95   1.6558   1.5317   1.3865   (outside trained range)
+     1.00   1.7971   1.6605   1.4240   (outside trained range)
+   running statistics best match a batch at beta ~ 0.35
+
+   M  checkpoints\Dp_w1_15k_s2024_last.pt
+     beta    drift      loc    scale
+     0.10   0.0206   0.0180   1.0100   (outside trained range)
+     0.15   0.0206   0.0180   1.0100
+     0.20   0.0206   0.0180   1.0100
+     0.25   0.0206   0.0180   1.0100
+     0.30   0.0206   0.0180   1.0100
+     0.35   0.0206   0.0180   1.0100
+     0.40   0.0206   0.0180   1.0100
+     0.45   0.0206   0.0180   1.0100
+     0.50   0.0206   0.0180   1.0100
+     0.55   0.0206   0.0180   1.0100
+     0.60   0.0206   0.0180   1.0100
+     0.65   0.0206   0.0180   1.0100   (outside trained range)
+     0.70   0.0206   0.0180   1.0100   (outside trained range)
+     0.75   0.0206   0.0180   1.0100   (outside trained range)
+     0.80   0.0206   0.0180   1.0100   (outside trained range)
+     0.85   0.0206   0.0180   1.0100   (outside trained range)
+     0.90   0.0206   0.0180   1.0100   (outside trained range)
+     0.95   0.0206   0.0180   1.0100   (outside trained range)
+     1.00   0.0206   0.0180   1.0100   (outside trained range)
+
+   wrote runs\bn_mech_w1_drift.csv
+   wrote runs\bn_mech_w1_drift.png
+
+2. COUNTERFACTUAL EVALUATION  (18 evaluations, 18 to run)
+   [  1/18] B B_w1_15k_s2024_last      plain             beta 0.3   cost 10.2699 | 0.9 min, ~14.6 min left
+   [  2/18] B B_w1_15k_s2024_last      plain             beta 0.6   cost 11.5881 | 1.7 min, ~13.7 min left
+   [  3/18] B B_w1_15k_s2024_last      plain             beta 0.9   cost 12.9011 | 2.6 min, ~12.9 min left
+   [  4/18] B B_w1_15k_s2024_last      bn_batch          beta 0.3   cost 10.2398 | 3.4 min, ~12.0 min left
+   [  5/18] B B_w1_15k_s2024_last      bn_batch          beta 0.6   cost 11.5313 | 4.3 min, ~11.2 min left
+   [  6/18] B B_w1_15k_s2024_last      bn_batch          beta 0.9   cost 12.4724 | 5.2 min, ~10.3 min left
+   [  7/18] B B_w1_15k_s2024_last      dec_ref           beta 0.3   cost 10.2681 | 6.0 min, ~9.5 min left
+   [  8/18] B B_w1_15k_s2024_last      dec_ref           beta 0.6   cost 11.5864 | 6.9 min, ~8.6 min left
+   [  9/18] B B_w1_15k_s2024_last      dec_ref           beta 0.9   cost 12.9240 | 7.8 min, ~7.8 min left
+   [ 10/18] B B_w1_15k_s2024_last      bn_batch+dec_ref  beta 0.3   cost 10.2375 | 8.6 min, ~6.9 min left
+   [ 11/18] B B_w1_15k_s2024_last      bn_batch+dec_ref  beta 0.6   cost 11.5322 | 9.5 min, ~6.0 min left
+   [ 12/18] B B_w1_15k_s2024_last      bn_batch+dec_ref  beta 0.9   cost 12.4798 | 10.4 min, ~5.2 min left
+   [ 13/18] M Dp_w1_15k_s2024_last     plain             beta 0.3   cost 9.7996 | 11.3 min, ~4.3 min left
+   [ 14/18] M Dp_w1_15k_s2024_last     plain             beta 0.6   cost 10.3172 | 12.1 min, ~3.5 min left
+   [ 15/18] M Dp_w1_15k_s2024_last     plain             beta 0.9   cost 10.6963 | 13.0 min, ~2.6 min left
+   [ 16/18] M Dp_w1_15k_s2024_last     bn_batch          beta 0.3   cost 9.7871 | 13.9 min, ~1.7 min left
+   [ 17/18] M Dp_w1_15k_s2024_last     bn_batch          beta 0.6   cost 10.3159 | 14.8 min, ~0.9 min left
+   [ 18/18] M Dp_w1_15k_s2024_last     bn_batch          beta 0.9   cost 10.6963 | 15.6 min, ~0.0 min left
+
+A. MEAN COST (seed-averaged) and components of the selected route
+    beta  arm condition             cost     dist     tard    late
+     0.3    M plain               9.7996   9.2792   0.0913   0.169
+     0.3    M bn_batch            9.7871   9.2655   0.0938   0.167
+     0.3    B plain              10.2699   9.6542   0.1086   0.199
+     0.3    B bn_batch           10.2398   9.6304   0.1094   0.195
+     0.3    B dec_ref            10.2681   9.6500   0.1089   0.200
+     0.3    B bn_batch+dec_ref   10.2375   9.6282   0.1094   0.195
+     0.6    M plain              10.3172   9.3704   0.1990   0.274
+     0.6    M bn_batch           10.3159   9.3670   0.2039   0.271
+     0.6    B plain              11.5881  10.2619   0.2881   0.375
+     0.6    B bn_batch           11.5313  10.2176   0.2828   0.374
+     0.6    B dec_ref            11.5864  10.2624   0.2889   0.373
+     0.6    B bn_batch+dec_ref   11.5322  10.2113   0.2855   0.375
+     0.9    M plain              10.6963   9.4303   0.3010   0.332
+     0.9    M bn_batch           10.6963   9.4249   0.3076   0.328
+     0.9    B plain              12.9011  10.8116   0.5301   0.515
+     0.9    B bn_batch           12.4724  10.5614   0.4682   0.487
+     0.9    B dec_ref            12.9240  10.8180   0.5354   0.518
+     0.9    B bn_batch+dec_ref   12.4798  10.5737   0.4697   0.483
+
+B. PLACEBO  M(bn_batch) - M(plain): must be ~0 (M's edge feature ignores beta)
+   beta 0.3    -0.0125  [ -0.0288,  +0.0037]
+   beta 0.6    -0.0013  [ -0.0314,  +0.0288]
+   beta 0.9    +0.0000  [ -0.0438,  +0.0438]
+
+C. GAP TO MEAN-ONLY  B(cond) - M(plain), paired; 'closed' = share of the plain gap removed
+   beta 0.3   plain              +0.4703 [ +0.4101,  +0.5305] closed        
+   beta 0.3   bn_batch           +0.4402 [ +0.3807,  +0.4997] closed    6.4%
+   beta 0.3   dec_ref            +0.4685 [ +0.4084,  +0.5286] closed    0.4%
+   beta 0.3   bn_batch+dec_ref   +0.4379 [ +0.3784,  +0.4974] closed    6.9%
+   beta 0.6   plain              +1.2709 [ +1.1456,  +1.3962] closed        
+   beta 0.6   bn_batch           +1.2141 [ +1.1064,  +1.3218] closed    4.5%
+   beta 0.6   dec_ref            +1.2692 [ +1.1439,  +1.3945] closed    0.1%
+   beta 0.6   bn_batch+dec_ref   +1.2151 [ +1.1066,  +1.3236] closed    4.4%
+   beta 0.9   plain              +2.2048 [ +2.0007,  +2.4089] closed        
+   beta 0.9   bn_batch           +1.7761 [ +1.6239,  +1.9284] closed   19.4%
+   beta 0.9   dec_ref            +2.2277 [ +2.0254,  +2.4300] closed   -1.0%
+   beta 0.9   bn_batch+dec_ref   +1.7835 [ +1.6327,  +1.9343] closed   19.1%
+
+D. EXCESS DEGRADATION over M from beta 0.3  [(B(beta) - B(0.3)) - (M(beta) - M(0.3))]
+   beta 0.6   plain              +0.8006 [ +0.7005,  +0.9006] removed        
+   beta 0.6   bn_batch           +0.7739 [ +0.6983,  +0.8495] removed    3.3%  per-seed -0.027  (all reduce)
+   beta 0.6   dec_ref            +0.8007 [ +0.7005,  +0.9009] removed   -0.0%  per-seed +0.000  (NOT all reduce)
+   beta 0.6   bn_batch+dec_ref   +0.7771 [ +0.6999,  +0.8543] removed    2.9%  per-seed -0.023  (all reduce)
+   beta 0.9   plain              +1.7345 [ +1.5531,  +1.9159] removed        
+   beta 0.9   bn_batch           +1.3360 [ +1.2129,  +1.4590] removed   23.0%  per-seed -0.399  (all reduce)
+   beta 0.9   dec_ref            +1.7592 [ +1.5789,  +1.9395] removed   -1.4%  per-seed +0.025  (NOT all reduce)
+   beta 0.9   bn_batch+dec_ref   +1.3455 [ +1.2236,  +1.4674] removed   22.4%  per-seed -0.389  (all reduce)
+
+3. VERDICT at beta 0.9  (thresholds fixed in advance: MAIN >= 50% with every seed agreeing, NOT < 20%)
+   encoder: BN train/eval + encoder scale     removes   23.0%  -> PARTIAL
+   decoder: linear extrapolation in w_edge    removes   -1.4%  -> NOT the mechanism
+   all scale effects together                 removes   22.4%  -> PARTIAL
+   residual NOT explained by scale (mechanism (a) or optimisation): 77.6%
+   in distribution (beta 0.3): bn_batch closes 6.4% of B's gap to M -- the pure train/eval discrepancy, no extrapolation involved
+
+   wrote runs\bn_mech_w1_summary.json
+
+done.

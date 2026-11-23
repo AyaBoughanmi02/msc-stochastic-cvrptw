@@ -1,0 +1,21 @@
+
+===== run started 2026-11-21 13:45:57 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\e2_reward_properties.py --ckpt checkpoints\M0_ftH_s2024_last.pt checkpoints\M0_ftH_s7_last.pt checkpoints\M0_ftH_s1234_last.pt --out runs\e2_reward_properties
+3 checkpoints (M0, M0, M0) | part A: 64 instances x 256 days (greedy) | part B: 8 instances x 64 days (sampling) | tardiness_weight 2.0
+
+M0_ftH_s2024_last.pt beta 0.3 | A1 H-S -0.0069 [-0.0426, +0.0288] | A2 var ratio 0.142 (pooled 0.156) log -1.950 [-2.014, -1.886] | A3 adv ratio 0.166 (pooled 0.179) | A4 analytic bias +1.3568 [+1.1603, +1.5533] | B1 grad var ratio 0.188 [0.169, 0.209] | cos(A,S) +0.096 cos(H,S) +0.598 split-half S +0.316 | 6.0 min
+M0_ftH_s2024_last.pt beta 0.6 | A1 H-S -0.0104 [-0.0649, +0.0441] | A2 var ratio 0.159 (pooled 0.171) log -1.837 [-1.882, -1.793] | A3 adv ratio 0.177 (pooled 0.188) | A4 analytic bias +3.2721 [+2.9670, +3.5772] | B1 grad var ratio 0.194 [0.180, 0.209] | cos(A,S) +0.070 cos(H,S) +0.822 split-half S +0.346 | 11.9 min
+M0_ftH_s2024_last.pt beta 0.9 | A1 H-S -0.0181 [-0.0898, +0.0537] | A2 var ratio 0.170 (pooled 0.183) log -1.772 [-1.818, -1.726] | A3 adv ratio 0.183 (pooled 0.195) | A4 analytic bias +5.2271 [+4.8291, +5.6251] | B1 grad var ratio 0.202 [0.185, 0.214] | cos(A,S) +0.085 cos(H,S) +0.907 split-half S +0.186 | 17.9 min
+M0_ftH_s7_last.pt beta 0.3 | A1 H-S +0.0056 [-0.0299, +0.0411] | A2 var ratio 0.141 (pooled 0.154) log -1.960 [-2.017, -1.902] | A3 adv ratio 0.172 (pooled 0.182) | A4 analytic bias +1.3635 [+1.1497, +1.5773] | B1 grad var ratio 0.206 [0.186, 0.228] | cos(A,S) +0.143 cos(H,S) +0.773 split-half S +0.012 | 24.1 min
+M0_ftH_s7_last.pt beta 0.6 | A1 H-S -0.0076 [-0.0632, +0.0480] | A2 var ratio 0.158 (pooled 0.171) log -1.845 [-1.887, -1.802] | A3 adv ratio 0.179 (pooled 0.189) | A4 analytic bias +3.2480 [+2.9272, +3.5688] | B1 grad var ratio 0.211 [0.195, 0.227] | cos(A,S) -0.156 cos(H,S) +0.739 split-half S -0.022 | 30.0 min
+M0_ftH_s7_last.pt beta 0.9 | A1 H-S -0.0200 [-0.0913, +0.0513] | A2 var ratio 0.168 (pooled 0.183) log -1.783 [-1.829, -1.737] | A3 adv ratio 0.184 (pooled 0.196) | A4 analytic bias +5.1783 [+4.7663, +5.5902] | B1 grad var ratio 0.206 [0.189, 0.221] | cos(A,S) -0.228 cos(H,S) +0.837 split-half S +0.069 | 35.7 min
+M0_ftH_s1234_last.pt beta 0.3 | A1 H-S +0.0021 [-0.0317, +0.0358] | A2 var ratio 0.144 (pooled 0.158) log -1.937 [-1.998, -1.876] | A3 adv ratio 0.172 (pooled 0.183) | A4 analytic bias +1.3055 [+1.0969, +1.5141] | B1 grad var ratio 0.207 [0.180, 0.231] | cos(A,S) +0.514 cos(H,S) +0.799 split-half S +0.269 | 41.5 min
+M0_ftH_s1234_last.pt beta 0.6 | A1 H-S -0.0105 [-0.0662, +0.0453] | A2 var ratio 0.160 (pooled 0.172) log -1.835 [-1.882, -1.788] | A3 adv ratio 0.181 (pooled 0.190) | A4 analytic bias +3.1647 [+2.8490, +3.4804] | B1 grad var ratio 0.203 [0.186, 0.219] | cos(A,S) +0.177 cos(H,S) +0.622 split-half S -0.030 | 47.7 min
+M0_ftH_s1234_last.pt beta 0.9 | A1 H-S -0.0104 [-0.0828, +0.0620] | A2 var ratio 0.169 (pooled 0.182) log -1.779 [-1.828, -1.730] | A3 adv ratio 0.185 (pooled 0.196) | A4 analytic bias +5.1146 [+4.7108, +5.5184] | B1 grad var ratio 0.209 [0.188, 0.224] | cos(A,S) -0.175 cos(H,S) +0.723 split-half S -0.003 | 54.0 min
+
+READING (fixed before running)
+  beta 0.3: R2a ok (CI covers 0) | R2b cost variance reduced on every seed: True | R2c gradient variance reduced on every seed: True
+  beta 0.6: R2a ok (CI covers 0) | R2b cost variance reduced on every seed: True | R2c gradient variance reduced on every seed: True
+  beta 0.9: R2a ok (CI covers 0) | R2b cost variance reduced on every seed: True | R2c gradient variance reduced on every seed: True
+
+  wrote runs\e2_reward_properties.json

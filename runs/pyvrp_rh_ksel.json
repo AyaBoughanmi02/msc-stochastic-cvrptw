@@ -1,0 +1,250 @@
+{
+  "args": {
+    "arm": [
+      [
+        "M0_ftH",
+        "checkpoints\\M0_ftH_s2024_last.pt",
+        "checkpoints\\M0_ftH_s7_last.pt",
+        "checkpoints\\M0_ftH_s1234_last.pt"
+      ]
+    ],
+    "beta_var": [
+      0.15,
+      0.375,
+      0.6
+    ],
+    "gate": 0.0,
+    "risk_alpha": null,
+    "test_size": 128,
+    "test_seed": 777,
+    "scenarios": 4,
+    "iterations": 500,
+    "buffer_k": [
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "frozen_limit": 1.0,
+    "workers": 6,
+    "pyvrp_seed": 0,
+    "skip_neural": true,
+    "eval_batch_size": 8,
+    "log_every": 10,
+    "out": "runs\\pyvrp_rh_ksel",
+    "allow_budget_mismatch": false,
+    "device": "cuda"
+  },
+  "n_instances": 128,
+  "0.15": {
+    "FROZEN": {
+      "distance": 8.203689575195312,
+      "late_count": 1.482421875,
+      "tardiness": 0.5162006616592407,
+      "total": 12.200935363769531
+    },
+    "RH": {
+      "distance": 8.58987969532609,
+      "late_count": 0.900390625,
+      "tardiness": 0.2794362499844283,
+      "total": 10.949533437378705,
+      "solves": 12852.0,
+      "infeasible_solves": 61.0,
+      "mean_iterations": 500.0,
+      "seconds": 202.08890319999773,
+      "seconds_per_instance_day": 0.3947048904296935
+    },
+    "RH_minus_FROZEN": {
+      "mean": -1.2514015650376678,
+      "lo": -1.6025971800627499,
+      "hi": -0.9002059500125857,
+      "se": 0.17918472738534075,
+      "significant": true
+    },
+    "RH k=0.25": {
+      "distance": 8.66209667827934,
+      "late_count": 0.693359375,
+      "tardiness": 0.2075324843171984,
+      "total": 10.46388039086014,
+      "solves": 12894.0,
+      "infeasible_solves": 60.0,
+      "mean_iterations": 500.0,
+      "seconds": 211.96342890000233,
+      "seconds_per_instance_day": 0.41399107324218676
+    },
+    "RH k=0.5": {
+      "distance": 8.741411954164505,
+      "late_count": 0.5625,
+      "tardiness": 0.2020928997080773,
+      "total": 10.270597745664418,
+      "solves": 12926.0,
+      "infeasible_solves": 76.0,
+      "mean_iterations": 500.0,
+      "seconds": 200.6218771000058,
+      "seconds_per_instance_day": 0.3918396042968766
+    },
+    "RH k=0.75": {
+      "distance": 8.954677248373628,
+      "late_count": 0.486328125,
+      "tardiness": 0.18200442334637046,
+      "total": 10.291342349722981,
+      "solves": 12976.0,
+      "infeasible_solves": 66.0,
+      "mean_iterations": 500.0,
+      "seconds": 203.16657129999658,
+      "seconds_per_instance_day": 0.39680971035156176
+    },
+    "RH k=1": {
+      "distance": 9.266969062387943,
+      "late_count": 0.40625,
+      "tardiness": 0.17181513388641179,
+      "total": 10.423099344596267,
+      "solves": 13127.0,
+      "infeasible_solves": 62.0,
+      "mean_iterations": 500.0,
+      "seconds": 219.99665559999994,
+      "seconds_per_instance_day": 0.42968096875000583
+    }
+  },
+  "0.375": {
+    "FROZEN": {
+      "distance": 8.203689575195312,
+      "late_count": 2.015625,
+      "tardiness": 1.1656806468963623,
+      "total": 14.566301345825195
+    },
+    "RH": {
+      "distance": 8.70087790582329,
+      "late_count": 1.27734375,
+      "tardiness": 0.7288163555786014,
+      "total": 12.713198136538267,
+      "solves": 12898.0,
+      "infeasible_solves": 103.0,
+      "mean_iterations": 500.0,
+      "seconds": 222.19104040000093,
+      "seconds_per_instance_day": 0.4339668775390635
+    },
+    "RH_minus_FROZEN": {
+      "mean": -1.8531032018363476,
+      "lo": -2.3888687453513646,
+      "hi": -1.3173376583213305,
+      "se": 0.27335478790172524,
+      "significant": true
+    },
+    "RH k=0.25": {
+      "distance": 8.85565048456192,
+      "late_count": 1.0390625,
+      "tardiness": 0.659869215101935,
+      "total": 12.25351391825825,
+      "solves": 12989.0,
+      "infeasible_solves": 122.0,
+      "mean_iterations": 500.0,
+      "seconds": 220.30210960000113,
+      "seconds_per_instance_day": 0.43027755859375816
+    },
+    "RH k=0.5": {
+      "distance": 9.184511261992157,
+      "late_count": 0.904296875,
+      "tardiness": 0.5887947217561305,
+      "total": 12.170694455504417,
+      "solves": 13072.0,
+      "infeasible_solves": 126.0,
+      "mean_iterations": 500.0,
+      "seconds": 224.86678920000122,
+      "seconds_per_instance_day": 0.43919294941406406
+    },
+    "RH k=0.75": {
+      "distance": 9.779928336851299,
+      "late_count": 0.85546875,
+      "tardiness": 0.568662830395624,
+      "total": 12.62819151300937,
+      "solves": 13329.0,
+      "infeasible_solves": 130.0,
+      "mean_iterations": 500.0,
+      "seconds": 221.71969250000257,
+      "seconds_per_instance_day": 0.43304627519532346
+    },
+    "RH k=1": {
+      "distance": 10.459051893092692,
+      "late_count": 0.755859375,
+      "tardiness": 0.45421863230876625,
+      "total": 12.879207907244563,
+      "solves": 13619.0,
+      "infeasible_solves": 796.0,
+      "mean_iterations": 500.0,
+      "seconds": 225.81374849999702,
+      "seconds_per_instance_day": 0.44104247812499864
+    }
+  },
+  "0.6": {
+    "FROZEN": {
+      "distance": 8.203689575195312,
+      "late_count": 2.365234375,
+      "tardiness": 1.7060437202453613,
+      "total": 16.34624671936035
+    },
+    "RH": {
+      "distance": 8.77492215204984,
+      "late_count": 1.466796875,
+      "tardiness": 1.0502587071387097,
+      "total": 13.809033328667283,
+      "solves": 12929.0,
+      "infeasible_solves": 138.0,
+      "mean_iterations": 500.0,
+      "seconds": 220.48887140000443,
+      "seconds_per_instance_day": 0.4306423275390614
+    },
+    "RH_minus_FROZEN": {
+      "mean": -2.5372130032628775,
+      "lo": -3.1629289212334832,
+      "hi": -1.9114970852922715,
+      "se": 0.3192486790423732,
+      "significant": true
+    },
+    "RH k=0.25": {
+      "distance": 8.975868341512978,
+      "late_count": 1.2890625,
+      "tardiness": 1.0498847963754088,
+      "total": 13.65376293193549,
+      "solves": 13023.0,
+      "infeasible_solves": 169.0,
+      "mean_iterations": 500.0,
+      "seconds": 219.01970930000243,
+      "seconds_per_instance_day": 0.42777287089843696
+    },
+    "RH k=0.5": {
+      "distance": 9.531673496589065,
+      "late_count": 1.14453125,
+      "tardiness": 0.929834351525642,
+      "total": 13.680404726415873,
+      "solves": 13236.0,
+      "infeasible_solves": 175.0,
+      "mean_iterations": 500.0,
+      "seconds": 218.03267530000448,
+      "seconds_per_instance_day": 0.425845069726563
+    },
+    "RH k=0.75": {
+      "distance": 10.368932333774865,
+      "late_count": 1.091796875,
+      "tardiness": 0.8883802738273516,
+      "total": 14.329286642372608,
+      "solves": 13595.0,
+      "infeasible_solves": 432.0,
+      "mean_iterations": 500.0,
+      "seconds": 215.74969639999472,
+      "seconds_per_instance_day": 0.4213861269531236
+    },
+    "RH k=1": {
+      "distance": 11.697072498500347,
+      "late_count": 1.03125,
+      "tardiness": 0.8704301487887278,
+      "total": 15.500432813540101,
+      "solves": 14154.0,
+      "infeasible_solves": 4563.0,
+      "mean_iterations": 500.0,
+      "seconds": 226.10680320000392,
+      "seconds_per_instance_day": 0.4416148509765634
+    }
+  },
+  "RH_degradation": 2.8594998912885785
+}

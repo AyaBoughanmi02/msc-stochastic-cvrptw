@@ -1,0 +1,229 @@
+
+===== run started 2026-10-14 20:56:18 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\pyvrp_rolling.py --arm M0_ftH checkpoints\M0_ftH_s2024_last.pt checkpoints\M0_ftH_s7_last.pt checkpoints\M0_ftH_s1234_last.pt --skip-neural --test-seed 777 --test-size 128 --beta-var 0.15 0.375 0.6 --buffer-k 0.25 0.5 0.75 1.0 --workers 6 --out runs\pyvrp_rh_ksel
+TRAINING BUDGET of the checkpoints being compared
+  M0_ftH_s2024_last.pt             steps = 20000
+  M0_ftH_s7_last.pt                steps = 20000
+  M0_ftH_s1234_last.pt             steps = 20000
+  all at 20000 steps -- budget matched
+
+128 instances (seed 777), n = 20, capacity 20, tardiness_weight 2.0, device cuda, 4 days, PyVRP 500 iterations per re-plan, 6 workers
+frozen mean-value plans @ 1 s: feasible 128/128, complete 128/128
+
+=== beta 0.15 ===
+  FROZEN   distance 8.2037 | late_count 1.4824 | tardiness 0.5162 | total 12.2009
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 42 s
+    day 0 step 20: 128 instances active, 2688 solves, 54 s
+    day 1 step 0: 128 instances active, 3339 solves, 60 s
+    day 1 step 10: 128 instances active, 4619 solves, 89 s
+    day 1 step 20: 128 instances active, 5899 solves, 100 s
+    day 2 step 0: 128 instances active, 6548 solves, 106 s
+    day 2 step 10: 128 instances active, 7828 solves, 135 s
+    day 2 step 20: 128 instances active, 9108 solves, 147 s
+    day 3 step 0: 128 instances active, 9758 solves, 154 s
+    day 3 step 10: 128 instances active, 11038 solves, 185 s
+    day 3 step 20: 128 instances active, 12318 solves, 198 s
+  RH       distance 8.5899 | late_count 0.9004 | tardiness 0.2794 | total 10.9495 | 0.395 s per instance-day, infeasible re-plans 61/12852
+  RH - FROZEN: -1.2514 [-1.6026, -0.9002]
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 45 s
+    day 0 step 20: 128 instances active, 2688 solves, 59 s
+    day 1 step 0: 128 instances active, 3348 solves, 65 s
+    day 1 step 10: 128 instances active, 4628 solves, 96 s
+    day 1 step 20: 128 instances active, 5908 solves, 110 s
+    day 2 step 0: 128 instances active, 6573 solves, 117 s
+    day 2 step 10: 128 instances active, 7853 solves, 144 s
+    day 2 step 20: 128 instances active, 9133 solves, 156 s
+    day 3 step 0: 128 instances active, 9801 solves, 163 s
+    day 3 step 10: 128 instances active, 11081 solves, 194 s
+    day 3 step 20: 128 instances active, 12361 solves, 208 s
+  RH k=0.25 distance 8.6621 | late_count 0.6934 | tardiness 0.2075 | total 10.4639 | 0.414 s per instance-day, infeasible re-plans 60/12894
+    day 0 step 0: 128 instances active, 128 solves, 13 s
+    day 0 step 10: 128 instances active, 1408 solves, 46 s
+    day 0 step 20: 128 instances active, 2688 solves, 59 s
+    day 1 step 0: 128 instances active, 3357 solves, 65 s
+    day 1 step 10: 128 instances active, 4637 solves, 97 s
+    day 1 step 20: 128 instances active, 5917 solves, 109 s
+    day 2 step 0: 128 instances active, 6585 solves, 115 s
+    day 2 step 10: 128 instances active, 7865 solves, 142 s
+    day 2 step 20: 128 instances active, 9145 solves, 154 s
+    day 3 step 0: 128 instances active, 9815 solves, 160 s
+    day 3 step 10: 128 instances active, 11095 solves, 187 s
+    day 3 step 20: 128 instances active, 12375 solves, 197 s
+  RH k=0.5 distance 8.7414 | late_count 0.5625 | tardiness 0.2021 | total 10.2706 | 0.392 s per instance-day, infeasible re-plans 76/12926
+    day 0 step 0: 128 instances active, 128 solves, 10 s
+    day 0 step 10: 128 instances active, 1408 solves, 34 s
+    day 0 step 20: 128 instances active, 2688 solves, 44 s
+    day 1 step 0: 128 instances active, 3372 solves, 49 s
+    day 1 step 10: 128 instances active, 4652 solves, 73 s
+    day 1 step 20: 128 instances active, 5932 solves, 90 s
+    day 2 step 0: 128 instances active, 6614 solves, 98 s
+    day 2 step 10: 128 instances active, 7894 solves, 133 s
+    day 2 step 20: 128 instances active, 9174 solves, 147 s
+    day 3 step 0: 128 instances active, 9858 solves, 154 s
+    day 3 step 10: 128 instances active, 11138 solves, 186 s
+    day 3 step 20: 128 instances active, 12418 solves, 199 s
+  RH k=0.75 distance 8.9547 | late_count 0.4863 | tardiness 0.1820 | total 10.2913 | 0.397 s per instance-day, infeasible re-plans 66/12976
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 57 s
+    day 1 step 0: 128 instances active, 3415 solves, 64 s
+    day 1 step 10: 128 instances active, 4695 solves, 96 s
+    day 1 step 20: 128 instances active, 5975 solves, 110 s
+    day 2 step 0: 128 instances active, 6691 solves, 117 s
+    day 2 step 10: 128 instances active, 7971 solves, 149 s
+    day 2 step 20: 128 instances active, 9251 solves, 162 s
+    day 3 step 0: 128 instances active, 9974 solves, 169 s
+    day 3 step 10: 128 instances active, 11254 solves, 201 s
+    day 3 step 20: 128 instances active, 12534 solves, 216 s
+  RH k=1   distance 9.2670 | late_count 0.4062 | tardiness 0.1718 | total 10.4231 | 0.430 s per instance-day, infeasible re-plans 62/13127
+
+=== beta 0.375 ===
+  FROZEN   distance 8.2037 | late_count 2.0156 | tardiness 1.1657 | total 14.5663
+    day 0 step 0: 128 instances active, 128 solves, 12 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 58 s
+    day 1 step 0: 128 instances active, 3352 solves, 65 s
+    day 1 step 10: 128 instances active, 4632 solves, 98 s
+    day 1 step 20: 128 instances active, 5912 solves, 111 s
+    day 2 step 0: 128 instances active, 6576 solves, 118 s
+    day 2 step 10: 128 instances active, 7856 solves, 151 s
+    day 2 step 20: 128 instances active, 9136 solves, 165 s
+    day 3 step 0: 128 instances active, 9795 solves, 172 s
+    day 3 step 10: 128 instances active, 11075 solves, 204 s
+    day 3 step 20: 128 instances active, 12355 solves, 218 s
+  RH       distance 8.7009 | late_count 1.2773 | tardiness 0.7288 | total 12.7132 | 0.434 s per instance-day, infeasible re-plans 103/12898
+  RH - FROZEN: -1.8531 [-2.3889, -1.3173]
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 45 s
+    day 0 step 20: 128 instances active, 2688 solves, 58 s
+    day 1 step 0: 128 instances active, 3385 solves, 65 s
+    day 1 step 10: 128 instances active, 4665 solves, 97 s
+    day 1 step 20: 128 instances active, 5945 solves, 111 s
+    day 2 step 0: 128 instances active, 6623 solves, 118 s
+    day 2 step 10: 128 instances active, 7903 solves, 149 s
+    day 2 step 20: 128 instances active, 9183 solves, 163 s
+    day 3 step 0: 128 instances active, 9866 solves, 170 s
+    day 3 step 10: 128 instances active, 11146 solves, 203 s
+    day 3 step 20: 128 instances active, 12426 solves, 216 s
+  RH k=0.25 distance 8.8557 | late_count 1.0391 | tardiness 0.6599 | total 12.2535 | 0.430 s per instance-day, infeasible re-plans 122/12989
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 43 s
+    day 0 step 20: 128 instances active, 2688 solves, 57 s
+    day 1 step 0: 128 instances active, 3400 solves, 64 s
+    day 1 step 10: 128 instances active, 4680 solves, 99 s
+    day 1 step 20: 128 instances active, 5960 solves, 114 s
+    day 2 step 0: 128 instances active, 6654 solves, 121 s
+    day 2 step 10: 128 instances active, 7934 solves, 155 s
+    day 2 step 20: 128 instances active, 9214 solves, 169 s
+    day 3 step 0: 128 instances active, 9923 solves, 175 s
+    day 3 step 10: 128 instances active, 11203 solves, 207 s
+    day 3 step 20: 128 instances active, 12483 solves, 221 s
+  RH k=0.5 distance 9.1845 | late_count 0.9043 | tardiness 0.5888 | total 12.1707 | 0.439 s per instance-day, infeasible re-plans 126/13072
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 58 s
+    day 1 step 0: 128 instances active, 3467 solves, 65 s
+    day 1 step 10: 128 instances active, 4747 solves, 98 s
+    day 1 step 20: 128 instances active, 6027 solves, 112 s
+    day 2 step 0: 128 instances active, 6790 solves, 118 s
+    day 2 step 10: 128 instances active, 8070 solves, 150 s
+    day 2 step 20: 128 instances active, 9350 solves, 164 s
+    day 3 step 0: 128 instances active, 10121 solves, 171 s
+    day 3 step 10: 128 instances active, 11401 solves, 203 s
+    day 3 step 20: 128 instances active, 12681 solves, 217 s
+    day 3 step 30: 1 instances active, 13329 solves, 220 s
+  RH k=0.75 distance 9.7799 | late_count 0.8555 | tardiness 0.5687 | total 12.6282 | 0.433 s per instance-day, infeasible re-plans 130/13329
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 59 s
+    day 1 step 0: 128 instances active, 3539 solves, 66 s
+    day 1 step 10: 128 instances active, 4819 solves, 98 s
+    day 1 step 20: 128 instances active, 6099 solves, 113 s
+    day 2 step 0: 128 instances active, 6937 solves, 120 s
+    day 2 step 10: 128 instances active, 8217 solves, 152 s
+    day 2 step 20: 128 instances active, 9497 solves, 167 s
+    day 3 step 0: 128 instances active, 10338 solves, 174 s
+    day 3 step 10: 128 instances active, 11618 solves, 206 s
+    day 3 step 20: 128 instances active, 12898 solves, 221 s
+    day 3 step 30: 1 instances active, 13619 solves, 224 s
+  RH k=1   distance 10.4591 | late_count 0.7559 | tardiness 0.4542 | total 12.8792 | 0.441 s per instance-day, infeasible re-plans 796/13619
+
+=== beta 0.6 ===
+  FROZEN   distance 8.2037 | late_count 2.3652 | tardiness 1.7060 | total 16.3462
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 57 s
+    day 1 step 0: 128 instances active, 3367 solves, 64 s
+    day 1 step 10: 128 instances active, 4647 solves, 97 s
+    day 1 step 20: 128 instances active, 5927 solves, 110 s
+    day 2 step 0: 128 instances active, 6598 solves, 116 s
+    day 2 step 10: 128 instances active, 7878 solves, 149 s
+    day 2 step 20: 128 instances active, 9158 solves, 163 s
+    day 3 step 0: 128 instances active, 9824 solves, 169 s
+    day 3 step 10: 128 instances active, 11104 solves, 203 s
+    day 3 step 20: 128 instances active, 12384 solves, 217 s
+  RH       distance 8.7749 | late_count 1.4668 | tardiness 1.0503 | total 13.8090 | 0.431 s per instance-day, infeasible re-plans 138/12929
+  RH - FROZEN: -2.5372 [-3.1629, -1.9115]
+    day 0 step 0: 128 instances active, 128 solves, 12 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 58 s
+    day 1 step 0: 128 instances active, 3385 solves, 65 s
+    day 1 step 10: 128 instances active, 4665 solves, 96 s
+    day 1 step 20: 128 instances active, 5945 solves, 110 s
+    day 2 step 0: 128 instances active, 6639 solves, 116 s
+    day 2 step 10: 128 instances active, 7919 solves, 149 s
+    day 2 step 20: 128 instances active, 9199 solves, 162 s
+    day 3 step 0: 128 instances active, 9895 solves, 169 s
+    day 3 step 10: 128 instances active, 11175 solves, 201 s
+    day 3 step 20: 128 instances active, 12455 solves, 215 s
+  RH k=0.25 distance 8.9759 | late_count 1.2891 | tardiness 1.0499 | total 13.6538 | 0.428 s per instance-day, infeasible re-plans 169/13023
+    day 0 step 0: 128 instances active, 128 solves, 12 s
+    day 0 step 10: 128 instances active, 1408 solves, 44 s
+    day 0 step 20: 128 instances active, 2688 solves, 58 s
+    day 1 step 0: 128 instances active, 3445 solves, 65 s
+    day 1 step 10: 128 instances active, 4725 solves, 96 s
+    day 1 step 20: 128 instances active, 6005 solves, 109 s
+    day 2 step 0: 128 instances active, 6742 solves, 116 s
+    day 2 step 10: 128 instances active, 8022 solves, 147 s
+    day 2 step 20: 128 instances active, 9302 solves, 161 s
+    day 3 step 0: 128 instances active, 10042 solves, 168 s
+    day 3 step 10: 128 instances active, 11322 solves, 199 s
+    day 3 step 20: 128 instances active, 12602 solves, 214 s
+  RH k=0.5 distance 9.5317 | late_count 1.1445 | tardiness 0.9298 | total 13.6804 | 0.426 s per instance-day, infeasible re-plans 175/13236
+    day 0 step 0: 128 instances active, 128 solves, 11 s
+    day 0 step 10: 128 instances active, 1408 solves, 43 s
+    day 0 step 20: 128 instances active, 2688 solves, 57 s
+    day 1 step 0: 128 instances active, 3538 solves, 64 s
+    day 1 step 10: 128 instances active, 4818 solves, 96 s
+    day 1 step 20: 128 instances active, 6098 solves, 110 s
+    day 2 step 0: 128 instances active, 6933 solves, 117 s
+    day 2 step 10: 128 instances active, 8213 solves, 147 s
+    day 2 step 20: 128 instances active, 9493 solves, 160 s
+    day 3 step 0: 128 instances active, 10327 solves, 167 s
+    day 3 step 10: 128 instances active, 11607 solves, 197 s
+    day 3 step 20: 128 instances active, 12887 solves, 211 s
+    day 3 step 30: 1 instances active, 13595 solves, 215 s
+  RH k=0.75 distance 10.3689 | late_count 1.0918 | tardiness 0.8884 | total 14.3293 | 0.421 s per instance-day, infeasible re-plans 432/13595
+    day 0 step 0: 128 instances active, 128 solves, 10 s
+    day 0 step 10: 128 instances active, 1408 solves, 42 s
+    day 0 step 20: 128 instances active, 2688 solves, 57 s
+    day 0 step 30: 6 instances active, 3549 solves, 61 s
+    day 1 step 0: 128 instances active, 3679 solves, 65 s
+    day 1 step 10: 128 instances active, 4959 solves, 96 s
+    day 1 step 20: 128 instances active, 6239 solves, 111 s
+    day 1 step 30: 1 instances active, 7079 solves, 115 s
+    day 2 step 0: 128 instances active, 7209 solves, 120 s
+    day 2 step 10: 128 instances active, 8489 solves, 151 s
+    day 2 step 20: 128 instances active, 9769 solves, 166 s
+    day 2 step 30: 4 instances active, 10620 solves, 171 s
+    day 3 step 0: 128 instances active, 10749 solves, 174 s
+    day 3 step 10: 128 instances active, 12029 solves, 206 s
+    day 3 step 20: 128 instances active, 13309 solves, 221 s
+    day 3 step 30: 4 instances active, 14154 solves, 225 s
+  RH k=1   distance 11.6971 | late_count 1.0312 | tardiness 0.8704 | total 15.5004 | 0.442 s per instance-day, infeasible re-plans 4563/14154
+
+RH degradation (beta 0.6 - beta 0.15): +2.8595
+
+wrote runs\pyvrp_rh_ksel.json and runs\pyvrp_rh_ksel_per_instance.pt

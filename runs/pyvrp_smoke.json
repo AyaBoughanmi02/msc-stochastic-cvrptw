@@ -1,0 +1,166 @@
+{
+  "args": {
+    "arm": [
+      [
+        "M0",
+        "checkpoints\\M0_w1_15k_s2024_last.pt"
+      ],
+      [
+        "M",
+        "checkpoints\\Dp_w1_15k_s2024_last.pt"
+      ]
+    ],
+    "beta_var": [
+      0.3,
+      0.6,
+      0.9
+    ],
+    "gate": 0.0,
+    "risk_alpha": 0.0,
+    "test_size": 16,
+    "test_seed": 4242,
+    "scenarios": 1,
+    "time_limits": [
+      0.1
+    ],
+    "plan_limit": 0.1,
+    "buffer_k": [],
+    "buffer_limit": 1.0,
+    "workers": 4,
+    "pyvrp_seed": 0,
+    "skip_neural": false,
+    "eval_batch_size": 8,
+    "out": "runs\\pyvrp_smoke",
+    "allow_budget_mismatch": false,
+    "device": "cuda"
+  },
+  "n_instances": 16,
+  "n_customers": 20,
+  "plans": {
+    "0.1": {
+      "n": 16.0,
+      "n_feasible": 16.0,
+      "n_complete": 16.0,
+      "mean_runtime_s": 0.10019296251994092,
+      "mean_pyvrp_distance": 8.262843750000002
+    }
+  },
+  "deterministic": {
+    "pyvrp": {
+      "0.1": 8.262838453054428
+    },
+    "M0": [
+      {
+        "best20": 9.701211214065552,
+        "gap20_pct": 17.85150890008468,
+        "ms20": 30.260468745836988,
+        "best160": 9.4826158285141,
+        "gap160_pct": 15.272465440427075,
+        "ms160": 52.595187502447516
+      }
+    ],
+    "M": [
+      {
+        "best20": 9.392108857631683,
+        "gap20_pct": 14.043176414179984,
+        "ms20": 19.318493752507493,
+        "best160": 9.034458965063095,
+        "gap160_pct": 9.556008269505757,
+        "ms160": 55.52208749577403
+      }
+    ]
+  },
+  "stochastic": {
+    "pyvrp": {
+      "0.3": {
+        "distance": 8.262838363647461,
+        "late_count": 2.1875,
+        "tardiness": 0.8654971122741699,
+        "total": 14.3688325881958
+      },
+      "0.6": {
+        "distance": 8.262838363647461,
+        "late_count": 2.0,
+        "tardiness": 1.6765350103378296,
+        "total": 15.615907669067383
+      },
+      "0.9": {
+        "distance": 8.262838363647461,
+        "late_count": 2.75,
+        "tardiness": 2.93048095703125,
+        "total": 19.623802185058594
+      }
+    },
+    "M0": {
+      "0.3": [
+        {
+          "planned_distance": {
+            "cost": 12.18287467956543,
+            "distance": 9.855785369873047,
+            "late_count": 0.6875,
+            "tardiness": 0.47604477405548096
+          },
+          "hindsight": 10.319295883178711
+        }
+      ],
+      "0.6": [
+        {
+          "planned_distance": {
+            "cost": 13.777739524841309,
+            "distance": 9.895322799682617,
+            "late_count": 1.0,
+            "tardiness": 0.941208004951477
+          },
+          "hindsight": 11.303741455078125
+        }
+      ],
+      "0.9": [
+        {
+          "planned_distance": {
+            "cost": 15.300034523010254,
+            "distance": 9.931995391845703,
+            "late_count": 1.25,
+            "tardiness": 1.4340195655822754
+          },
+          "hindsight": 11.955127716064453
+        }
+      ]
+    },
+    "M": {
+      "0.3": [
+        {
+          "planned_distance": {
+            "cost": 11.436738967895508,
+            "distance": 9.418824195861816,
+            "late_count": 0.5625,
+            "tardiness": 0.44645750522613525
+          },
+          "hindsight": 9.74523639678955
+        }
+      ],
+      "0.6": [
+        {
+          "planned_distance": {
+            "cost": 13.022523880004883,
+            "distance": 9.484758377075195,
+            "late_count": 0.9375,
+            "tardiness": 0.8313823938369751
+          },
+          "hindsight": 10.385421752929688
+        }
+      ],
+      "0.9": [
+        {
+          "planned_distance": {
+            "cost": 14.68846607208252,
+            "distance": 9.488313674926758,
+            "late_count": 1.1875,
+            "tardiness": 1.4125757217407227
+          },
+          "hindsight": 10.945671081542969
+        }
+      ]
+    },
+    "pyvrp_degradation": 5.254968076944351
+  }
+}

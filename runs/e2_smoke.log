@@ -1,0 +1,11 @@
+
+===== run started 2026-11-21 13:44:36 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\e2_reward_properties.py --ckpt checkpoints\M0_ftH_s2024_last.pt --beta-var 0.3 --test-size 4 --days 3 --grad-instances 2 --grad-days 4 --bootstrap 50 --out runs\e2_smoke
+1 checkpoints (M0) | part A: 4 instances x 3 days (greedy) | part B: 2 instances x 4 days (sampling) | tardiness_weight 2.0
+
+M0_ftH_s2024_last.pt beta 0.3 | A1 H-S -1.3944 [-4.1869, +1.3981] | A2 var ratio 0.150 (pooled 0.211) log -1.900 [-2.736, -1.064] | A3 adv ratio 0.223 (pooled 0.232) | A4 analytic bias -1.4879 [-6.6711, +3.6954] | B1 grad var ratio 0.210 [nan, nan] | cos(A,S) +0.245 cos(H,S) +0.887 split-half S +0.101 | 0.1 min
+
+READING (fixed before running)
+  beta 0.3: R2a ok (CI covers 0) | R2b cost variance reduced on every seed: True | R2c gradient variance reduced on every seed: False
+
+  wrote runs\e2_smoke.json

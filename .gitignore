@@ -4,7 +4,12 @@ __pycache__/
 *.pyc
 /data/ 
 checkpoints/
-runs/
+runs/*
+!runs/*.log
+!runs/*.json
+!runs/*.csv
+!runs/*.txt
+runs/*.console.log
 wandb/
 *.pt
 *.ckpt

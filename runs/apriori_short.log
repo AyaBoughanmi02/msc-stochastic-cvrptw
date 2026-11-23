@@ -1,0 +1,98 @@
+
+===== run started 2026-11-21 17:00:46 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\apriori_study.py --arm M0_ftH1k checkpoints\M0_ftH1k_s2024_last.pt checkpoints\M0_ftH1k_s7_last.pt checkpoints\M0_ftH1k_s1234_last.pt --arm M0_ftS1k checkpoints\M0_ftS1k_s2024_last.pt checkpoints\M0_ftS1k_s7_last.pt checkpoints\M0_ftS1k_s1234_last.pt --rank-rule planned_distance --out runs\apriori_short
+TRAINING BUDGET of the checkpoints being compared
+  M0_ftH1k_s2024_last.pt           steps = 16000
+  M0_ftH1k_s7_last.pt              steps = 16000
+  M0_ftH1k_s1234_last.pt           steps = 16000
+  M0_ftS1k_s2024_last.pt           steps = 16000
+  M0_ftS1k_s7_last.pt              steps = 16000
+  M0_ftS1k_s1234_last.pt           steps = 16000
+  all at 16000 steps -- budget matched
+
+arms: M0_ftH1k (M0, 3 seeds), M0_ftS1k (M0, 3 seeds)
+gate lambda forced to 0 where present | VGT-R alpha learned
+256 instances (seed 4242) | 4 test days | 8 selection days (saa) | augment=True | tardiness_weight 2.0
+
+  [  1/18] M0_ftH1k seed 1 beta 0.3 | hindsight 9.4389 | expected 11.6523 | planned_distance 11.5911 | saa 11.6493 | average 12.1453 | 2.7 min
+  [  2/18] M0_ftH1k seed 2 beta 0.3 | hindsight 9.3670 | expected 11.5505 | planned_distance 11.6758 | saa 11.8103 | average 12.1907 | 5.4 min
+  [  3/18] M0_ftH1k seed 3 beta 0.3 | hindsight 9.3917 | expected 11.7782 | planned_distance 11.6326 | saa 11.7771 | average 12.2133 | 8.1 min
+  [  4/18] M0_ftH1k seed 1 beta 0.6 | hindsight 9.8852 | expected 13.4213 | planned_distance 13.2692 | saa 13.5372 | average 13.9867 | 10.8 min
+  [  5/18] M0_ftH1k seed 2 beta 0.6 | hindsight 9.7870 | expected 13.5976 | planned_distance 13.5678 | saa 13.4649 | average 13.9811 | 13.6 min
+  [  6/18] M0_ftH1k seed 3 beta 0.6 | hindsight 9.7772 | expected 13.6466 | planned_distance 13.5111 | saa 13.5664 | average 14.0160 | 16.3 min
+  [  7/18] M0_ftH1k seed 1 beta 0.9 | hindsight 10.2245 | expected 14.9724 | planned_distance 14.7090 | saa 14.7835 | average 15.2420 | 19.1 min
+  [  8/18] M0_ftH1k seed 2 beta 0.9 | hindsight 10.0951 | expected 14.7171 | planned_distance 15.0713 | saa 14.8904 | average 15.2554 | 21.8 min
+  [  9/18] M0_ftH1k seed 3 beta 0.9 | hindsight 10.0668 | expected 14.9117 | planned_distance 14.8339 | saa 14.8313 | average 15.2635 | 24.5 min
+  [ 10/18] M0_ftS1k seed 1 beta 0.3 | hindsight 9.3715 | expected 11.6582 | planned_distance 11.5101 | saa 11.7585 | average 12.2504 | 27.3 min
+  [ 11/18] M0_ftS1k seed 2 beta 0.3 | hindsight 9.3510 | expected 11.7073 | planned_distance 11.5346 | saa 11.7812 | average 12.2776 | 30.0 min
+  [ 12/18] M0_ftS1k seed 3 beta 0.3 | hindsight 9.4105 | expected 11.7240 | planned_distance 11.5766 | saa 11.8663 | average 12.2964 | 32.8 min
+  [ 13/18] M0_ftS1k seed 1 beta 0.6 | hindsight 9.8129 | expected 13.5388 | planned_distance 13.3626 | saa 13.6187 | average 14.0780 | 35.5 min
+  [ 14/18] M0_ftS1k seed 2 beta 0.6 | hindsight 9.7451 | expected 13.7952 | planned_distance 13.2755 | saa 13.7607 | average 14.0586 | 38.3 min
+  [ 15/18] M0_ftS1k seed 3 beta 0.6 | hindsight 9.7996 | expected 13.6011 | planned_distance 13.2725 | saa 13.5036 | average 14.0932 | 41.0 min
+  [ 16/18] M0_ftS1k seed 1 beta 0.9 | hindsight 10.1009 | expected 14.7836 | planned_distance 14.7043 | saa 15.0447 | average 15.3242 | 43.8 min
+  [ 17/18] M0_ftS1k seed 2 beta 0.9 | hindsight 10.0302 | expected 15.0891 | planned_distance 14.5346 | saa 15.1299 | average 15.3364 | 46.6 min
+  [ 18/18] M0_ftS1k seed 3 beta 0.9 | hindsight 10.0515 | expected 14.9887 | planned_distance 14.7204 | saa 15.0144 | average 15.4118 | 49.3 min
+
+1. COST PER CHOICE RULE (seed-averaged; lower is better)
+       arm  beta        hindsight         expected planned_distance              saa          average
+-----------------------------------------------------------------------------------------------------
+  M0_ftH1k   0.3           9.3992          11.6603          11.6332          11.7455          12.1831
+  M0_ftH1k   0.6           9.8165          13.5552          13.4494          13.5228          13.9946
+  M0_ftH1k   0.9          10.1288          14.8671          14.8714          14.8350          15.2536
+  M0_ftS1k   0.3           9.3777          11.6965          11.5405          11.8020          12.2748
+  M0_ftS1k   0.6           9.7859          13.6451          13.3035          13.6277          14.0766
+  M0_ftS1k   0.9          10.0609          14.9538          14.6531          15.0630          15.3575
+
+2a. DOES CHOOSING BY PLANNED DISTANCE BEAT NO SELECTION?  planned_distance - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+  M0_ftH1k   0.3   -0.5500 [ -0.6797,  -0.4202]    -0.7416  +0.0568   -0.5542 -0.5149 -0.5808   yes
+  M0_ftH1k   0.6   -0.5452 [ -0.7353,  -0.3552]    -0.6982  +0.0411   -0.7175 -0.4132 -0.5049   yes
+  M0_ftH1k   0.9   -0.3823 [ -0.6610,  -0.1035]    -0.6750  +0.0479   -0.5330 -0.1841 -0.4296   yes
+  M0_ftS1k   0.3   -0.7344 [ -0.8471,  -0.6217]    -0.8137  +0.0284   -0.7402 -0.7430 -0.7198   yes
+  M0_ftS1k   0.6   -0.7731 [ -0.9342,  -0.6120]    -0.7581  +0.0032   -0.7154 -0.7831 -0.8208   yes
+  M0_ftS1k   0.9   -0.7044 [ -0.9516,  -0.4571]    -0.7322  +0.0024   -0.6198 -0.8019 -0.6914   yes
+
+2b. DOES THE ANALYTIC EXPECTED COST BEAT NO SELECTION?  expected - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+  M0_ftH1k   0.3   -0.5228 [ -0.6305,  -0.4151]    -0.3607  -0.0649   -0.4930 -0.6402 -0.4351   yes
+  M0_ftH1k   0.6   -0.4394 [ -0.6129,  -0.2660]    -0.1494  -0.1015   -0.5654 -0.3835 -0.3694   yes
+  M0_ftH1k   0.9   -0.3866 [ -0.6540,  -0.1192]    -0.0573  -0.1178   -0.2696 -0.5383 -0.3518   yes
+  M0_ftS1k   0.3   -0.5783 [ -0.6849,  -0.4718]    -0.3712  -0.0813   -0.5922 -0.5703 -0.5725   yes
+  M0_ftS1k   0.6   -0.4316 [ -0.6097,  -0.2534]    -0.1676  -0.1078   -0.5392 -0.2634 -0.4921   yes
+  M0_ftS1k   0.9   -0.4037 [ -0.6244,  -0.1830]    -0.0803  -0.1073   -0.5406 -0.2474 -0.4231   yes
+
+2c. DOES SAA BEAT NO SELECTION?  saa - average
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+  M0_ftH1k   0.3   -0.4376 [ -0.5732,  -0.3020]    -0.4981  +0.0178   -0.4960 -0.3804 -0.4363   yes
+  M0_ftH1k   0.6   -0.4718 [ -0.6540,  -0.2896]    -0.3763  -0.0058   -0.4495 -0.5162 -0.4496   yes
+  M0_ftH1k   0.9   -0.4186 [ -0.6331,  -0.2041]    -0.2978  +0.0013   -0.4586 -0.3651 -0.4322   yes
+  M0_ftS1k   0.3   -0.4728 [ -0.6046,  -0.3409]    -0.5247  +0.0163   -0.4918 -0.4964 -0.4301   yes
+  M0_ftS1k   0.6   -0.4489 [ -0.6324,  -0.2655]    -0.3966  +0.0016   -0.4593 -0.2979 -0.5896   yes
+  M0_ftS1k   0.9   -0.2945 [ -0.5479,  -0.0411]    -0.3252  +0.0346   -0.2795 -0.2065 -0.3975   yes
+
+2d. DOES THE VARIANCE HELP THE CHOICE?  saa - planned_distance (negative = uncertainty-aware choice cheaper)
+       arm  beta      diff                95% CI     d dist   d late   per-seed diff            all agree
+---------------------------------------------------------------------------------------------------------
+  M0_ftH1k   0.3   +0.1124 [ -0.0570,  +0.2818]    +0.2435  -0.0391   +0.0581 +0.1345 +0.1445   yes
+  M0_ftH1k   0.6   +0.0734 [ -0.1581,  +0.3049]    +0.3219  -0.0469   +0.2681 -0.1030 +0.0552   NO
+  M0_ftH1k   0.9   -0.0363 [ -0.3072,  +0.2345]    +0.3772  -0.0465   +0.0745 -0.1809 -0.0026   NO
+  M0_ftS1k   0.3   +0.2616 [ +0.1017,  +0.4215]    +0.2890  -0.0120   +0.2484 +0.2466 +0.2898   yes
+  M0_ftS1k   0.6   +0.3242 [ +0.1088,  +0.5395]    +0.3616  -0.0016   +0.2561 +0.4853 +0.2311   yes
+  M0_ftS1k   0.9   +0.4099 [ +0.0921,  +0.7276]    +0.4070  +0.0322   +0.3403 +0.5953 +0.2939   yes
+
+3. HOW OPTIMISTIC WERE THE EARLIER TABLES?  hindsight - planned_distance
+  M0_ftH1k: beta 0.3: -2.2339  beta 0.6: -3.6329  beta 0.9: -4.7426
+  M0_ftS1k: beta 0.3: -2.1628  beta 0.6: -3.5176  beta 0.9: -4.5923
+
+4. DEPLOYABLE MODEL RANKING (rule 'planned_distance'), each arm - M0_ftH1k, paired; degradation = cost(beta 0.9) - cost(beta 0.3)
+       arm   beta       arm  M0_ftH1k      diff                95% CI   per-seed diff            all agree
+----------------------------------------------------------------------------------------------------------
+  M0_ftS1k    0.3   11.5405   11.6332   -0.0927 [ -0.2132,  +0.0278]   -0.0810 -0.1411 -0.0560   yes
+  M0_ftS1k    0.6   13.3035   13.4494   -0.1459 [ -0.3280,  +0.0362]   +0.0935 -0.2924 -0.2387   NO
+  M0_ftS1k    0.9   14.6531   14.8714   -0.2183 [ -0.4500,  +0.0135]   -0.0046 -0.5367 -0.1135   yes
+  M0_ftS1k  degr.    3.1127    3.2382   -0.1256 [ -0.3235,  +0.0724]
+
+  wrote runs\apriori_short.json

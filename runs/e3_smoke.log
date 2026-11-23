@@ -1,0 +1,14 @@
+
+===== run started 2026-11-21 15:35:59 =====
+command: C:\Users\ASUS\Documents\IDEAS\Memoire\code\scripts\e3_ranking_bias.py --ckpt checkpoints\M0_ftH_s2024_last.pt --beta-var 0.3 --test-size 4 --days 8 --k-days 1 4 --out runs\e3_smoke
+1 checkpoints | 4 instances x 8 days (4 for the estimators, 4 for the truth) | K in [1, 4] | tardiness_weight 2.0
+
+M0_ftH_s2024_last.pt beta 0.3 | true cost 11.655 (sd over starts 1.270)
+    corr   A +0.349 H1 +0.332 S1 +0.223 H4 +0.329 S4 +0.306
+    regret A 0.243 H1 0.600 S1 0.790 H4 0.407 S4 1.323
+    corr H1-A -0.017 [-0.249, +0.215] | corr H1-S1 +0.109 [+0.018, +0.199] | regret A-H1 -0.357 [-0.948, +0.234] | regret S1-H1 +0.190 [-0.303, +0.682] | 0.0 min
+
+READING (fixed before running)
+  beta 0.3: R3a mixed: no claim | R3b hybrid ranks better than sampled on every seed: True
+
+  wrote runs\e3_smoke.json

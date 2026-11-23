@@ -1,0 +1,143 @@
+{
+  "args": {
+    "arm": [
+      [
+        "M0_ftH",
+        "checkpoints\\M0_ftH_s2024_last.pt",
+        "checkpoints\\M0_ftH_s7_last.pt",
+        "checkpoints\\M0_ftH_s1234_last.pt"
+      ]
+    ],
+    "beta_var": [
+      0.3,
+      0.6,
+      0.9
+    ],
+    "gate": 0.0,
+    "risk_alpha": null,
+    "test_size": 256,
+    "test_seed": 4242,
+    "scenarios": 4,
+    "iterations": 500,
+    "buffer_k": [],
+    "frozen_limit": 1.0,
+    "workers": 6,
+    "pyvrp_seed": 0,
+    "skip_neural": false,
+    "eval_batch_size": 8,
+    "log_every": 10,
+    "out": "runs\\pyvrp_rolling",
+    "allow_budget_mismatch": false,
+    "device": "cuda"
+  },
+  "n_instances": 256,
+  "0.3": {
+    "FROZEN": {
+      "distance": 8.172154426574707,
+      "late_count": 1.8935546875,
+      "tardiness": 1.1742064952850342,
+      "total": 14.307676315307617
+    },
+    "RH": {
+      "distance": 8.63161811279133,
+      "late_count": 1.1259765625,
+      "tardiness": 0.6007821690291166,
+      "total": 12.08513557119295,
+      "solves": 25727.0,
+      "infeasible_solves": 246.0,
+      "mean_iterations": 500.0,
+      "seconds": 432.7892315000063,
+      "seconds_per_instance_day": 0.42264573437500275
+    },
+    "RH_minus_FROZEN": {
+      "mean": -2.222540669608861,
+      "lo": -2.59967490122688,
+      "hi": -1.8454064379908424,
+      "se": 0.19241895852067634,
+      "significant": true
+    },
+    "neural": {
+      "M0_ftH": {
+        "planned_distance_per_seed": [
+          11.516537507995963,
+          11.66439327225089,
+          11.505927247926593
+        ],
+        "seconds_per_instance_day_all_seeds": 1.5223962240234457
+      }
+    }
+  },
+  "0.6": {
+    "FROZEN": {
+      "distance": 8.172154426574707,
+      "late_count": 2.4208984375,
+      "tardiness": 2.1090896129608154,
+      "total": 17.23213005065918
+    },
+    "RH": {
+      "distance": 8.736942176707089,
+      "late_count": 1.4248046875,
+      "tardiness": 1.11497301136842,
+      "total": 13.816497585736215,
+      "solves": 25811.0,
+      "infeasible_solves": 333.0,
+      "mean_iterations": 500.0,
+      "seconds": 484.8020254000003,
+      "seconds_per_instance_day": 0.47343947832030864
+    },
+    "RH_minus_FROZEN": {
+      "mean": -3.4156322656199336,
+      "lo": -3.9850365751818746,
+      "hi": -2.8462279560579926,
+      "se": 0.29051773887782695,
+      "significant": true
+    },
+    "neural": {
+      "M0_ftH": {
+        "planned_distance_per_seed": [
+          13.169382683932781,
+          13.396852483972907,
+          13.337471570819616
+        ],
+        "seconds_per_instance_day_all_seeds": 1.6865401022460915
+      }
+    }
+  },
+  "0.9": {
+    "FROZEN": {
+      "distance": 8.172154426574707,
+      "late_count": 2.56640625,
+      "tardiness": 2.802759885787964,
+      "total": 18.910484313964844
+    },
+    "RH": {
+      "distance": 8.775392814539373,
+      "late_count": 1.5869140625,
+      "tardiness": 1.5951506322599016,
+      "total": 15.139522206503898,
+      "solves": 25852.0,
+      "infeasible_solves": 414.0,
+      "mean_iterations": 500.0,
+      "seconds": 518.5158469000016,
+      "seconds_per_instance_day": 0.5063631320312467
+    },
+    "RH_minus_FROZEN": {
+      "mean": -3.7709638024680316,
+      "lo": -4.45201908485794,
+      "hi": -3.0899085200781227,
+      "se": 0.3474835672440457,
+      "significant": true
+    },
+    "neural": {
+      "M0_ftH": {
+        "planned_distance_per_seed": [
+          14.497249729931355,
+          14.901075484231114,
+          14.69548468850553
+        ],
+        "seconds_per_instance_day_all_seeds": 1.839776748437501
+      }
+    }
+  },
+  "RH_degradation": 3.054386635310948
+}

@@ -1,0 +1,78 @@
+{
+  "args": {
+    "ckpt": [
+      "checkpoints\\M0_ftH_s2024_last.pt"
+    ],
+    "beta_var": [
+      0.3
+    ],
+    "test_size": 4,
+    "test_seed": 4242,
+    "days": 3,
+    "grad_instances": 2,
+    "grad_days": 4,
+    "bootstrap": 50,
+    "skip_grad": false,
+    "out": "runs\\e2_smoke",
+    "device": "cuda"
+  },
+  "runs": [
+    {
+      "ckpt": "checkpoints\\M0_ftH_s2024_last.pt",
+      "beta": 0.3,
+      "A": {
+        "A1_hybrid_minus_sampled": {
+          "mean": -1.3943701247374218,
+          "lo": -4.186881392222137,
+          "hi": 1.3981411427472932,
+          "n": 4
+        },
+        "A2_log_var_ratio": {
+          "mean": -1.900326940813735,
+          "lo": -2.7363254464356994,
+          "hi": -1.0643284351917708,
+          "n": 4
+        },
+        "A2_ratio_geomean": 0.14951972712940306,
+        "A2_ratio_pooled": 0.2105497462265124,
+        "A2_starts_without_variance": 14,
+        "A3_log_adv_var_ratio": {
+          "mean": -1.499426235037829,
+          "lo": -2.1288233976050437,
+          "hi": -0.8700290724706142,
+          "n": 4
+        },
+        "A3_ratio_geomean": 0.22325822115127164,
+        "A3_ratio_pooled": 0.23162756742376017,
+        "A4_analytic_minus_true": {
+          "mean": -1.487864679098129,
+          "lo": -6.671095775030414,
+          "hi": 3.6953664168341565,
+          "n": 4
+        },
+        "true_cost_mean": 14.418687015771866,
+        "analytic_cost_mean": 12.930822336673737,
+        "analytic_parts_mean": {
+          "distance": 9.510469490289688,
+          "late_count": 1.284095920994878,
+          "tardiness": 0.4260805147700012
+        }
+      },
+      "B": {
+        "B1_trace_ratio": {
+          "mean": 0.20955343544483185,
+          "lo": NaN,
+          "hi": NaN,
+          "n_days": 4
+        },
+        "B1_trace_sampled": 998619.6875,
+        "B1_trace_hybrid": 209264.1875,
+        "B1_trace_analytic": 15039.5849609375,
+        "B2_cos_analytic_sampled": 0.24451765418052673,
+        "B2_cos_hybrid_sampled": 0.8870561122894287,
+        "B2_cos_sampled_split_half": 0.10083036124706268,
+        "B2_cos_hybrid_split_half": -0.022220507264137268
+      }
+    }
+  ]
+}
